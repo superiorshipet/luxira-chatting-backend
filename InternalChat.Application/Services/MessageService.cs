@@ -242,8 +242,9 @@ public class MessageService : IMessageService
         var message = await _unitOfWork.Messages.GetByIdAsync(messageId);
         if (message == null) throw new Exception("Message not found.");
         
-        var isMember = await _unitOfWork.GroupMembers.IsActiveMemberAsync(message.GroupId, callerUserId);
-        if (!isMember) throw new UnauthorizedAccessException("Not a member of this group.");
+        var caller = await _unitOfWork.Users.GetByIdAsync(callerUserId);
+        if (caller == null || caller.Role != UserRole.Admin)
+            throw new UnauthorizedAccessException("Only Admins can view message edit histories.");
         
         var history = await _unitOfWork.Messages.GetEditHistoryAsync(messageId);
         

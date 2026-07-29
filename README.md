@@ -84,17 +84,17 @@ Base URL: `http://localhost:<port>/api`
 * **`GET /api/Group/{groupId}/members`**
   * **Description:** Gets active members of a specific group.
 * **`GET /api/Group/{groupId}/messages`**
-  * **Description:** Gets paginated message history for a group.
+  * **Description:** Gets paginated message history for a group. Note: If a message is soft-deleted, standard users will receive `null` for the message content. Administrators will receive the original unmasked content with the `IsDeleted = true` flag.
   * **Query Parameters:** `?beforeCursor={timestamp}&take=50`
 * **`POST /api/Group/{groupId}/members/me/mute`**
   * **Description:** Mutes or unmutes a group for the authenticated user.
   * **Body:** `{ "isMuted": true }`
 
 ### 4. Message Operations
-*Requires Standard user JWT `[Authorize]`*
+*Requires Admin JWT `[Authorize(Roles = "Admin")]`*
 
 * **`GET /api/Message/{messageId}/history`**
-  * **Description:** Retrieves the edit history of a specific message.
+  * **Description:** Retrieves the complete edit history of a specific message. This is strictly reserved for Administrators.
 
 ### 5. Attachments
 *Requires Standard user JWT `[Authorize]`*
