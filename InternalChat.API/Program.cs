@@ -60,7 +60,7 @@ builder.Services.AddScoped<IChatNotifier, ChatNotifier>();
 builder.Services.AddSingleton<IJwtProvider, JwtProvider>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<IPresenceTracker, PresenceTracker>();
-builder.Services.AddSingleton<IFileStorage, InternalChat.Infrastructure.Storage.LocalFileStorage>();
+builder.Services.AddScoped<IFileStorage, InternalChat.Infrastructure.Storage.CloudinaryService>();
 builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 
 // Configure JWT Authentication

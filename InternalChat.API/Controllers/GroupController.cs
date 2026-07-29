@@ -16,71 +16,55 @@ public class GroupController : ControllerBase
 
     public GroupController(IGroupService groupService, IMessageService messageService)
     {
-        _groupService = groupService;
+        _groupService   = groupService;
         _messageService = messageService;
     }
-    
+
     private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    /// <summary>Get all groups the user belongs to, with optional filter: "unread" | "favorites" | (none for all)</summary>
     [HttpGet("my-groups")]
-    public async Task<IActionResult> GetMyGroups()
+    public async Task<IActionResult> GetMyGroups([FromQuery] string? filter)
     {
-        var userId = GetUserId();
-        var groups = await _groupService.GetUserGroupsAsync(userId);
+        var groups = await _groupService.GetUserGroupsFilteredAsync(GetUserId(), filter);
         return Ok(groups);
     }
 
+    /// <summary>Get the members of a group.</summary>
     [HttpGet("{groupId}/members")]
     public async Task<IActionResult> GetGroupMembers(Guid groupId)
     {
         try
         {
-            var userId = GetUserId();
-            var members = await _groupService.GetGroupMembersAsync(groupId, userId);
+            var members = await _groupService.GetGroupMembersAsync(groupId, GetUserId());
             return Ok(members);
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid();
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
 
+    /// <summary>Get paginated message history for a group.</summary>
     [HttpGet("{groupId}/messages")]
     public async Task<IActionResult> GetMessages(Guid groupId, [FromQuery] DateTime? beforeCursor, [FromQuery] int take = 50)
     {
         try
         {
-            var userId = GetUserId();
-            var cursor = beforeCursor ?? DateTime.UtcNow;
-            var messages = await _messageService.GetMessagesAsync(groupId, userId, cursor, take);
+            var cursor   = beforeCursor ?? DateTime.UtcNow;
+            var messages = await _messageService.GetMessagesAsync(groupId, GetUserId(), cursor, take);
             return Ok(messages);
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid();
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
 
-    [HttpPost("{groupId}/members/me/mute")]
-    public async Task<IActionResult> MuteMember(Guid groupId, [FromBody] MuteMemberRequest request)
+    /// <summary>Search for a keyword across all messages in groups the user belongs to.</summary>
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchMessages([FromQuery] string keyword)
     {
-        try
-        {
-            var userId = GetUserId();
-            await _groupService.MuteMemberAsync(groupId, userId, request.IsMuted);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        if (string.IsNullOrWhiteSpace(keyword))
+            return BadRequest(new { error = "Keyword is required." });
+
+        var results = await _groupService.SearchMessagesAsync(GetUserId(), keyword);
+        return Ok(results);
     }
 }
