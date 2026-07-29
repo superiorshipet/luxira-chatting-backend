@@ -117,6 +117,10 @@ Base URL: `http://localhost:<port>/api`
   * Sends a message to a group.
 * **`EditMessage(Guid messageId, string newContent)`**
   * Edits a previously sent message.
+* **`DeleteMessage(Guid groupId, Guid messageId)`**
+  * Soft-deletes a message (Admins can delete any message, users can delete their own).
+* **`PinMessage(Guid groupId, Guid messageId, bool isPinned)`**
+  * Pins or unpins a message (Requires Admin privileges).
 * **`MarkAsRead(Guid groupId, Guid messageId)`**
   * Dispatches a read receipt.
 * **`ReactToMessage(Guid groupId, Guid messageId, string emoji)`**
@@ -129,6 +133,10 @@ Base URL: `http://localhost:<port>/api`
   * Triggered when a new message is posted in a joined group.
 * **`MessageEdited(MessageDto message)`**
   * Triggered when a message is edited.
+* **`MessageDeleted(Guid groupId, Guid messageId, Guid userId)`**
+  * Triggered when a message is deleted.
+* **`MessagePinned(Guid groupId, Guid messageId, bool isPinned)`**
+  * Triggered when an admin pins or unpins a message.
 * **`MessageRead(Guid groupId, Guid messageId, Guid userId)`**
   * Triggered when a member reads a message.
 * **`MessageReacted(Guid groupId, Guid messageId, Guid userId, string emoji)`**

@@ -29,6 +29,7 @@ public class MessageService : IMessageService
             SentAt = DateTime.UtcNow,
             IsEdited = false,
             IsDeleted = false,
+            IsPinned = false,
             ReplyToMessageId = replyToMessageId
         };
         
@@ -58,6 +59,7 @@ public class MessageService : IMessageService
             message.SentAt,
             message.IsEdited,
             message.IsDeleted,
+            message.IsPinned,
             message.ReplyToMessageId,
             message.ForwardedFromMessageId,
             message.ForwardedFromGroupId,
@@ -70,6 +72,7 @@ public class MessageService : IMessageService
         var message = await _unitOfWork.Messages.GetByIdAsync(messageId);
         if (message == null) throw new Exception("Message not found.");
         if (message.SenderId != senderId) throw new UnauthorizedAccessException("Not original sender.");
+        if (message.IsDeleted) throw new Exception("Cannot edit a deleted message.");
 
         var history = new MessageEditHistory
         {
@@ -89,9 +92,38 @@ public class MessageService : IMessageService
         
         return new MessageDto(
             message.Id, message.GroupId, message.SenderId, "", message.Content, message.MessageType, 
-            message.SentAt, message.IsEdited, message.IsDeleted, message.ReplyToMessageId, 
+            message.SentAt, message.IsEdited, message.IsDeleted, message.IsPinned, message.ReplyToMessageId, 
             message.ForwardedFromMessageId, message.ForwardedFromGroupId, new List<AttachmentDto>()
         );
+    }
+
+    public async Task DeleteMessageAsync(Guid messageId, Guid callerUserId)
+    {
+        var message = await _unitOfWork.Messages.GetByIdAsync(messageId);
+        if (message == null) throw new Exception("Message not found.");
+
+        var caller = await _unitOfWork.Users.GetByIdAsync(callerUserId);
+        
+        if (message.SenderId != callerUserId && caller?.Role != UserRole.Admin)
+            throw new UnauthorizedAccessException("Cannot delete this message.");
+
+        message.IsDeleted = true;
+        _unitOfWork.Messages.Update(message);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    public async Task PinMessageAsync(Guid messageId, Guid callerUserId, bool isPinned)
+    {
+        var caller = await _unitOfWork.Users.GetByIdAsync(callerUserId);
+        if (caller == null || caller.Role != UserRole.Admin)
+            throw new UnauthorizedAccessException("Only admins can pin messages.");
+
+        var message = await _unitOfWork.Messages.GetByIdAsync(messageId);
+        if (message == null) throw new Exception("Message not found.");
+
+        message.IsPinned = isPinned;
+        _unitOfWork.Messages.Update(message);
+        await _unitOfWork.SaveChangesAsync();
     }
 
     public async Task MarkAsReadAsync(Guid messageId, Guid userId)
@@ -161,6 +193,7 @@ public class MessageService : IMessageService
                 SentAt = DateTime.UtcNow,
                 IsEdited = false,
                 IsDeleted = false,
+                IsPinned = false,
                 ForwardedFromMessageId = sourceMessage.Id,
                 ForwardedFromGroupId = sourceMessage.GroupId
             };
@@ -169,7 +202,7 @@ public class MessageService : IMessageService
             
             forwardedMessages.Add(new MessageDto(
                 newMessage.Id, newMessage.GroupId, newMessage.SenderId, "Forwarder", newMessage.Content, 
-                newMessage.MessageType, newMessage.SentAt, newMessage.IsEdited, newMessage.IsDeleted, 
+                newMessage.MessageType, newMessage.SentAt, newMessage.IsEdited, newMessage.IsDeleted, newMessage.IsPinned, 
                 null, newMessage.ForwardedFromMessageId, newMessage.ForwardedFromGroupId, new List<AttachmentDto>()
             ));
         }
@@ -183,13 +216,25 @@ public class MessageService : IMessageService
         var isMember = await _unitOfWork.GroupMembers.IsActiveMemberAsync(groupId, callerUserId);
         if (!isMember) throw new UnauthorizedAccessException("Not a member of this group.");
         
+        var caller = await _unitOfWork.Users.GetByIdAsync(callerUserId);
+        var isAdmin = caller?.Role == UserRole.Admin;
+
         var messages = await _unitOfWork.Messages.GetPageAsync(groupId, beforeCursor, take);
         
-        return messages.Select(m => new MessageDto(
-            m.Id, m.GroupId, m.SenderId, m.Sender?.FullName ?? "Unknown", m.Content, m.MessageType, 
-            m.SentAt, m.IsEdited, m.IsDeleted, m.ReplyToMessageId, m.ForwardedFromMessageId, m.ForwardedFromGroupId, 
-            m.Attachments.Select(a => new AttachmentDto(a.FileUrl, a.FileType, a.FileSizeBytes, a.ThumbnailUrl, a.DurationSeconds))
-        ));
+        return messages.Select(m => {
+            var content = m.Content;
+            // Normal users don't see deleted content
+            if (m.IsDeleted && !isAdmin)
+            {
+                content = null;
+            }
+
+            return new MessageDto(
+                m.Id, m.GroupId, m.SenderId, m.Sender?.FullName ?? "Unknown", content, m.MessageType, 
+                m.SentAt, m.IsEdited, m.IsDeleted, m.IsPinned, m.ReplyToMessageId, m.ForwardedFromMessageId, m.ForwardedFromGroupId, 
+                m.Attachments.Select(a => new AttachmentDto(a.FileUrl, a.FileType, a.FileSizeBytes, a.ThumbnailUrl, a.DurationSeconds))
+            );
+        });
     }
 
     public async Task<IEnumerable<MessageEditHistoryDto>> GetMessageEditHistoryAsync(Guid messageId, Guid callerUserId)
