@@ -31,7 +31,7 @@ public class JwtProvider : IJwtProvider
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim("role", user.Role.ToString()),
+            new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("phone", user.PhoneNumber)
         };
 
