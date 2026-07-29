@@ -19,6 +19,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 // Configure Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
@@ -88,6 +90,12 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await AppDbSeeder.SeedAsync(context);
 }
+
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "InternalChat API V1");
+});
 
 app.UseStaticFiles();
 app.UseAuthentication();
