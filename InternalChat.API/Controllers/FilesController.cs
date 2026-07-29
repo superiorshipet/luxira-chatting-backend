@@ -1,13 +1,12 @@
 using InternalChat.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace InternalChat.API.Controllers;
 
 /// <summary>
 /// Handles file and image uploads via Cloudinary.
-/// All responses include the Cloudinary CDN URL for use in messages and profiles.
+/// Returns Cloudinary CDN URLs for use in messages and profiles.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -21,12 +20,11 @@ public class FilesController : ControllerBase
 
     /// <summary>
     /// Upload any file (image, video, audio, document) to Cloudinary.
-    /// Returns the public CDN URL.
-    /// Max size: 50MB.
+    /// Returns the public CDN URL. Max size: 50MB.
     /// </summary>
     [HttpPost("upload")]
     [RequestSizeLimit(52_428_800)] // 50 MB
-    public async Task<IActionResult> Upload(IFormFile file, [FromQuery] string folder = "chat")
+    public async Task<IActionResult> Upload(IFormFile file)
     {
         if (file == null || file.Length == 0)
             return BadRequest(new { error = "No file provided." });
@@ -34,8 +32,8 @@ public class FilesController : ControllerBase
         try
         {
             await using var stream = file.OpenReadStream();
-            var url = await _fileStorage.SaveFileAsync(stream, file.FileName, folder);
-            return Ok(new { url, fileName = file.FileName, size = file.Length });
+            var result = await _fileStorage.UploadAsync(stream, file.FileName, file.ContentType);
+            return Ok(new { url = result.Url, fileName = file.FileName, size = result.SizeBytes, fileType = result.FileType });
         }
         catch (Exception ex)
         {
@@ -44,7 +42,8 @@ public class FilesController : ControllerBase
     }
 
     /// <summary>
-    /// Upload a profile picture specifically (goes to "profiles" folder in Cloudinary).
+    /// Upload a profile picture (images only, max 10MB).
+    /// Caller should then call PUT /api/Auth/profile with the returned URL.
     /// </summary>
     [HttpPost("upload/profile")]
     [RequestSizeLimit(10_485_760)] // 10 MB
@@ -60,8 +59,8 @@ public class FilesController : ControllerBase
         try
         {
             await using var stream = file.OpenReadStream();
-            var url = await _fileStorage.SaveFileAsync(stream, file.FileName, "profiles");
-            return Ok(new { url });
+            var result = await _fileStorage.UploadAsync(stream, file.FileName, file.ContentType);
+            return Ok(new { url = result.Url });
         }
         catch (Exception ex)
         {

@@ -3,6 +3,7 @@ using System;
 using InternalChat.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InternalChat.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260729131855_AddVerification_PrivateChats_Cloudinary_Favorites")]
+    partial class AddVerification_PrivateChats_Cloudinary_Favorites
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -399,24 +402,6 @@ namespace InternalChat.Infrastructure.Migrations
                     b.ToTable("UserFavoriteGroups");
                 });
 
-            modelBuilder.Entity("InternalChat.Domain.Entities.UserFavoriteMessage", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("MessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("FavoritedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("UserId", "MessageId");
-
-                    b.HasIndex("MessageId");
-
-                    b.ToTable("UserFavoriteMessages");
-                });
-
             modelBuilder.Entity("InternalChat.Domain.Entities.Attachment", b =>
                 {
                     b.HasOne("InternalChat.Domain.Entities.Message", "Message")
@@ -617,25 +602,6 @@ namespace InternalChat.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Group");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("InternalChat.Domain.Entities.UserFavoriteMessage", b =>
-                {
-                    b.HasOne("InternalChat.Domain.Entities.Message", "Message")
-                        .WithMany()
-                        .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("InternalChat.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Message");
 
                     b.Navigation("User");
                 });

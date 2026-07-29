@@ -7,7 +7,7 @@ namespace InternalChat.Infrastructure.Storage;
 
 /// <summary>
 /// Handles all file uploads to Cloudinary.
-/// Replaces the LocalFileStorage implementation for production use.
+/// Replaces LocalFileStorage for production use.
 /// </summary>
 public class CloudinaryService : IFileStorage
 {
@@ -20,82 +20,74 @@ public class CloudinaryService : IFileStorage
         var apiSecret = configuration["Cloudinary:ApiSecret"]!;
 
         var account = new Account(cloudName, apiKey, apiSecret);
-        _cloudinary = new Cloudinary(account) { Api = { Secure = true } };
+        _cloudinary  = new Cloudinary(account) { Api = { Secure = true } };
     }
 
-    /// <summary>Uploads a file stream to Cloudinary and returns its secure URL.</summary>
-    public async Task<string> SaveFileAsync(Stream fileStream, string fileName, string folder = "chat")
+    /// <summary>Uploads a file stream to Cloudinary and returns its secure URL and metadata.</summary>
+    public async Task<FileUploadResult> UploadAsync(Stream fileStream, string fileName, string contentType)
     {
-        var extension = Path.GetExtension(fileName).TrimStart('.').ToLower();
-        var isImage   = new[] { "jpg", "jpeg", "png", "gif", "webp", "bmp" }.Contains(extension);
-        var isVideo   = new[] { "mp4", "mov", "avi", "webm" }.Contains(extension);
-        var isAudio   = new[] { "mp3", "wav", "ogg", "m4a", "webm" }.Contains(extension);
+        var folder    = DetermineFolder(contentType);
+        var isImage   = contentType.StartsWith("image/");
+        var isVideo   = contentType.StartsWith("video/");
+
+        string secureUrl;
+        long   bytes = fileStream.CanSeek ? fileStream.Length : 0;
 
         if (isImage)
         {
             var uploadParams = new ImageUploadParams
             {
-                File          = new FileDescription(fileName, fileStream),
-                Folder        = folder,
-                UseFilename   = true,
+                File           = new FileDescription(fileName, fileStream),
+                Folder         = folder,
                 UniqueFilename = true,
-                Overwrite     = false,
+                Overwrite      = false,
                 Transformation = new Transformation().Quality("auto").FetchFormat("auto")
             };
             var result = await _cloudinary.UploadAsync(uploadParams);
             if (result.Error != null)
-                throw new Exception($"Cloudinary upload failed: {result.Error.Message}");
-            return result.SecureUrl.ToString();
+                throw new Exception($"Cloudinary image upload failed: {result.Error.Message}");
+            secureUrl = result.SecureUrl.ToString();
+            bytes     = result.Bytes;
         }
         else if (isVideo)
         {
             var uploadParams = new VideoUploadParams
             {
-                File        = new FileDescription(fileName, fileStream),
-                Folder      = folder,
-                UseFilename = true,
+                File           = new FileDescription(fileName, fileStream),
+                Folder         = folder,
+                UniqueFilename = true,
             };
             var result = await _cloudinary.UploadAsync(uploadParams);
             if (result.Error != null)
-                throw new Exception($"Cloudinary upload failed: {result.Error.Message}");
-            return result.SecureUrl.ToString();
+                throw new Exception($"Cloudinary video upload failed: {result.Error.Message}");
+            secureUrl = result.SecureUrl.ToString();
+            bytes     = result.Bytes;
         }
         else
         {
-            // Raw file (audio, document, etc.)
+            // Audio, PDFs, documents, etc.
             var uploadParams = new RawUploadParams
             {
-                File        = new FileDescription(fileName, fileStream),
-                Folder      = folder,
-                UseFilename = true,
+                File           = new FileDescription(fileName, fileStream),
+                Folder         = folder,
+                UniqueFilename = true,
             };
             var result = await _cloudinary.UploadAsync(uploadParams);
             if (result.Error != null)
-                throw new Exception($"Cloudinary upload failed: {result.Error.Message}");
-            return result.SecureUrl.ToString();
+                throw new Exception($"Cloudinary raw upload failed: {result.Error.Message}");
+            secureUrl = result.SecureUrl.ToString();
+            bytes     = result.Bytes;
         }
+
+        return new FileUploadResult(secureUrl, null, contentType, bytes);
     }
 
-    /// <summary>Deletes a file from Cloudinary by its public ID.</summary>
-    public async Task DeleteFileAsync(string fileUrl)
+    private static string DetermineFolder(string contentType)
     {
-        // Extract publicId from the URL (e.g., "chat/filename" from full URL)
-        try
-        {
-            var uri      = new Uri(fileUrl);
-            var segments = uri.AbsolutePath.Split('/');
-            // Find "upload" and take everything after it, minus the extension
-            var uploadIndex = Array.IndexOf(segments, "upload");
-            if (uploadIndex >= 0 && uploadIndex < segments.Length - 1)
-            {
-                var publicIdWithExt = string.Join("/", segments.Skip(uploadIndex + 1));
-                var publicId        = Path.ChangeExtension(publicIdWithExt, null);
-                await _cloudinary.DestroyAsync(new DeletionParams(publicId));
-            }
-        }
-        catch
-        {
-            // Best-effort deletion, don't throw
-        }
+        if (contentType.StartsWith("image/"))           return "chat/images";
+        if (contentType.StartsWith("video/"))           return "chat/videos";
+        if (contentType.StartsWith("audio/"))           return "chat/audio";
+        if (contentType == "application/pdf")           return "chat/documents";
+        return "chat/files";
     }
 }

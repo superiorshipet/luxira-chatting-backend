@@ -2,8 +2,6 @@ using InternalChat.Application.DTOs;
 using InternalChat.Application.Interfaces.Repositories;
 using InternalChat.Application.Interfaces.Services;
 using InternalChat.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
-using InternalChat.Infrastructure.Persistence;
 
 namespace InternalChat.Application.Services;
 
@@ -11,28 +9,23 @@ public class GroupService : IGroupService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cacheService;
-    private readonly AppDbContext _db;
+    private readonly IGroupQueryRepository _groupQuery;
 
-    public GroupService(IUnitOfWork unitOfWork, ICacheService cacheService, AppDbContext db)
+    public GroupService(IUnitOfWork unitOfWork, ICacheService cacheService, IGroupQueryRepository groupQuery)
     {
-        _unitOfWork   = unitOfWork;
+        _unitOfWork  = unitOfWork;
         _cacheService = cacheService;
-        _db           = db;
+        _groupQuery   = groupQuery;
     }
 
     public async Task<GroupDto> CreateGroupAsync(string name, string? imageUrl, Guid adminId)
     {
         var group = new Group
         {
-            Id               = Guid.NewGuid(),
-            Name             = name,
-            ImageUrl         = imageUrl,
-            CreatedByAdminId = adminId,
-            CreatedAt        = DateTime.UtcNow,
-            IsArchived       = false,
-            IsPrivate        = false
+            Id = Guid.NewGuid(), Name = name, ImageUrl = imageUrl,
+            CreatedByAdminId = adminId, CreatedAt = DateTime.UtcNow,
+            IsArchived = false, IsPrivate = false
         };
-
         await _unitOfWork.Groups.AddAsync(group);
         await _unitOfWork.SaveChangesAsync();
         return new GroupDto(group.Id, group.Name, group.ImageUrl, group.CreatedAt);
@@ -41,25 +34,19 @@ public class GroupService : IGroupService
     public async Task AddMembersAsync(Guid groupId, IEnumerable<Guid> userIds, Guid adminId)
     {
         var group = await _unitOfWork.Groups.GetByIdAsync(groupId) ?? throw new Exception("Group not found");
-
         foreach (var userId in userIds)
         {
             if (!await _unitOfWork.GroupMembers.IsActiveMemberAsync(groupId, userId))
             {
                 await _unitOfWork.GroupMembers.AddAsync(new GroupMember
                 {
-                    Id             = Guid.NewGuid(),
-                    GroupId        = groupId,
-                    UserId         = userId,
-                    IsMuted        = false,
-                    JoinedAt       = DateTime.UtcNow,
-                    AddedByAdminId = adminId
+                    Id = Guid.NewGuid(), GroupId = groupId, UserId = userId,
+                    IsMuted = false, JoinedAt = DateTime.UtcNow, AddedByAdminId = adminId
                 });
                 await _cacheService.RemoveAsync($"member:{groupId}:{userId}");
                 await _cacheService.RemoveAsync($"user:groups:{userId}");
             }
         }
-
         await _unitOfWork.SaveChangesAsync();
         await _cacheService.RemoveAsync($"group:members:{groupId}");
     }
@@ -98,55 +85,7 @@ public class GroupService : IGroupService
         => await GetUserGroupsFilteredAsync(userId, null);
 
     public async Task<IEnumerable<GroupDto>> GetUserGroupsFilteredAsync(Guid userId, string? filter)
-    {
-        // Get all active group memberships for this user
-        var memberGroupIds = await _db.GroupMembers
-            .Where(gm => gm.UserId == userId && gm.RemovedAt == null)
-            .Select(gm => gm.GroupId)
-            .ToListAsync();
-
-        var favoriteGroupIds = await _db.UserFavoriteGroups
-            .Where(f => f.UserId == userId)
-            .Select(f => f.GroupId)
-            .ToListAsync();
-
-        // Get unread counts for each group
-        var readMessageIds = await _db.MessageReads
-            .Where(mr => mr.UserId == userId)
-            .Select(mr => mr.MessageId)
-            .ToListAsync();
-
-        var groups = await _db.Groups
-            .Where(g => memberGroupIds.Contains(g.Id) && !g.IsArchived)
-            .Include(g => g.Messages.OrderByDescending(m => m.SentAt).Take(1))
-            .ToListAsync();
-
-        var result = groups.Select(g =>
-        {
-            var isFavorite   = favoriteGroupIds.Contains(g.Id);
-            var lastMsg      = g.Messages.FirstOrDefault();
-            var unreadCount  = _db.Messages
-                .Count(m => m.GroupId == g.Id && !m.IsDeleted && !readMessageIds.Contains(m.Id) && m.SenderId != userId);
-
-            return new GroupDto(
-                g.Id, g.Name, g.ImageUrl, g.CreatedAt,
-                g.IsPrivate, g.PrivateTargetUserId,
-                IsFavorite: isFavorite,
-                UnreadCount: unreadCount,
-                LastMessage: lastMsg?.Content,
-                LastMessageAt: lastMsg?.SentAt);
-        }).AsEnumerable();
-
-        // Apply filter
-        result = filter switch
-        {
-            "unread"    => result.Where(g => g.UnreadCount > 0),
-            "favorites" => result.Where(g => g.IsFavorite),
-            _           => result
-        };
-
-        return result.OrderByDescending(g => g.LastMessageAt ?? g.CreatedAt);
-    }
+        => await _groupQuery.GetUserGroupsWithMetaAsync(userId, filter);
 
     public async Task<IEnumerable<GroupMemberDto>> GetGroupMembersAsync(Guid groupId, Guid callerUserId)
     {
@@ -155,47 +94,11 @@ public class GroupService : IGroupService
 
         var members = await _unitOfWork.GroupMembers.GetActiveMembersAsync(groupId);
         return members.Select(m => new GroupMemberDto(
-            m.User!.Id,
-            m.User.FullName,
-            m.User.ProfileImageUrl,
-            m.User.Role.ToString(),
-            m.User.IsOnline,
-            m.User.LastSeenAt,
-            m.IsMuted,
-            m.User.IsVerified));
+            m.User!.Id, m.User.FullName, m.User.ProfileImageUrl,
+            m.User.Role.ToString(), m.User.IsOnline, m.User.LastSeenAt,
+            m.IsMuted, m.User.IsVerified));
     }
 
-    /// <summary>Full-text search across all messages in groups the user belongs to.</summary>
     public async Task<IEnumerable<MessageDto>> SearchMessagesAsync(Guid userId, string keyword)
-    {
-        var memberGroupIds = await _db.GroupMembers
-            .Where(gm => gm.UserId == userId && gm.RemovedAt == null)
-            .Select(gm => gm.GroupId)
-            .ToListAsync();
-
-        return await _db.Messages
-            .Where(m =>
-                memberGroupIds.Contains(m.GroupId) &&
-                !m.IsDeleted &&
-                m.Content != null &&
-                EF.Functions.ILike(m.Content, $"%{keyword}%"))
-            .Include(m => m.Sender)
-            .OrderByDescending(m => m.SentAt)
-            .Take(100)
-            .Select(m => new MessageDto(
-                m.Id,
-                m.GroupId,
-                m.SenderId,
-                m.Sender!.FullName,
-                m.Sender.ProfileImageUrl,
-                m.Content,
-                m.MessageType.ToString(),
-                m.SentAt,
-                m.IsEdited,
-                m.IsDeleted,
-                m.IsPinned,
-                m.ReplyToMessageId,
-                null, null, null))
-            .ToListAsync();
-    }
+        => await _groupQuery.SearchMessagesAsync(userId, keyword);
 }

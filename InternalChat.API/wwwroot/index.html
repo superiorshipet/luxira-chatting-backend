@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luxira Chat - Testing Hub</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SignalR Client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Tajawal:wght@400;500;700;900&display=swap');
+        body {
+            font-family: 'Tajawal', 'Outfit', sans-serif;
+            background-color: #f4f7f6;
+        }
+        .teal-gradient {
+            background: linear-gradient(135deg, #009688 0%, #00b4d8 100%);
+        }
+    </style>
+</head>
+<body class="p-6 text-slate-800">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="teal-gradient rounded-3xl p-6 mb-8 text-white flex justify-between items-center shadow-xl">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-wide">LUXIRA HOLDING</h1>
+                <p class="text-teal-100 mt-1">مركز التجربة والاختبار - الباك إند المطور</p>
+            </div>
+            <div id="connectionStatus" class="bg-teal-900/40 px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-500 inline-block" id="statusDot"></span>
+                <span>غير متصل بالدردشة الحية</span>
+            </div>
+        </header>
+
+        <!-- Auth Section -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <!-- Login -->
+            <div class="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-teal-600">
+                    🔐 تسجيل الدخول
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">رقم الهاتف</label>
+                        <input type="text" id="loginPhone" placeholder="+20123456789" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">كلمة المرور</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-teal-500">
+                    </div>
+                    <button onclick="login()" class="w-full teal-gradient text-white py-3 rounded-xl font-bold shadow-lg shadow-teal-500/20 hover:opacity-90">تسجيل الدخول</button>
+                </div>
+            </div>
+
+            <!-- Forgot Password -->
+            <div class="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-teal-600">
+                    📧 استعادة كلمة المرور
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">البريد الإلكتروني المسجل</label>
+                        <input type="email" id="resetEmail" placeholder="employee@example.com" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-teal-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">رمز الاستعادة المرسل بالإيميل</label>
+                            <input type="text" id="resetToken" placeholder="كود الرمز" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-teal-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">كلمة المرور الجديدة</label>
+                            <input type="password" id="resetNewPassword" placeholder="••••••••" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-teal-500">
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <button onclick="forgotPassword()" class="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-200">1. إرسال كود الاستعادة</button>
+                        <button onclick="resetPassword()" class="flex-1 teal-gradient text-white py-3 rounded-xl font-bold hover:opacity-90">2. حفظ كلمة المرور الجديدة</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard Area (Only visible after login) -->
+        <div id="mainDashboard" class="hidden space-y-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Sidebar / Chat list -->
+                <div class="bg-white rounded-3xl p-6 shadow-md border border-slate-100 flex flex-col h-[600px]">
+                    <h2 class="text-xl font-bold mb-4 text-slate-800">💬 المحادثات</h2>
+                    <!-- Filters -->
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="loadGroups()" class="flex-1 py-2 text-xs font-bold rounded-lg bg-teal-50 text-teal-600" id="filterAllBtn">الكل</button>
+                        <button onclick="loadGroups('unread')" class="flex-1 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-600" id="filterUnreadBtn">غير المقروء</button>
+                        <button onclick="loadGroups('favorites')" class="flex-1 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-600" id="filterFavBtn">المفضلة</button>
+                    </div>
+                    <!-- Groups List -->
+                    <div id="groupsList" class="flex-1 overflow-y-auto space-y-2">
+                        <p class="text-slate-400 text-center py-8">جاري تحميل المحادثات...</p>
+                    </div>
+                </div>
+
+                <!-- Active Chat area -->
+                <div class="bg-white rounded-3xl p-6 shadow-md border border-slate-100 flex flex-col h-[600px] lg:col-span-2">
+                    <div class="border-b pb-4 mb-4 flex justify-between items-center" id="chatHeader">
+                        <div>
+                            <h3 class="text-lg font-bold" id="activeChatName">اختر محادثة للبدء</h3>
+                            <p class="text-xs text-slate-400" id="activeChatMeta"></p>
+                        </div>
+                        <div class="flex items-center gap-2" id="chatActions">
+                            <!-- Toggle Chat Favorite -->
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div id="messagesArea" class="flex-1 overflow-y-auto space-y-4 p-2 bg-slate-50 rounded-2xl mb-4">
+                        <p class="text-slate-400 text-center py-16">حدد أي مجموعة أو مستخدم من القائمة لعرض المحادثة.</p>
+                    </div>
+
+                    <!-- Composer / Send -->
+                    <div class="flex items-center gap-3">
+                        <input type="text" id="messageInput" placeholder="اكتب رسالتك هنا..." class="flex-1 border rounded-xl px-4 py-3 focus:outline-teal-500" onkeydown="handleTyping(event)">
+                        <!-- Media Upload button -->
+                        <label class="bg-slate-100 p-3 rounded-xl cursor-pointer hover:bg-slate-200">
+                            📷
+                            <input type="file" id="mediaUploadInput" class="hidden" onchange="uploadMediaFile(event)">
+                        </label>
+                        <button onclick="sendChatMessage()" class="teal-gradient text-white px-6 py-3 rounded-xl font-bold">إرسال</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WebRTC Live Call Simulator -->
+            <div class="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-teal-600">
+                    📞 محاكي المكالمات (Voice & Video Signaling)
+                </h2>
+                <div class="flex gap-4">
+                    <button onclick="startCall(false)" class="bg-green-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-600 flex items-center gap-2">
+                        🔊 مكالمة صوتية جماعية
+                    </button>
+                    <button onclick="startCall(true)" class="bg-teal-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-teal-600 flex items-center gap-2">
+                        📹 مكالمة فيديو جماعية
+                    </button>
+                    <button onclick="hangUp()" class="bg-red-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-600">
+                        🛑 إنهاء المكالمة
+                    </button>
+                </div>
+                <div class="mt-4 bg-slate-900 text-teal-400 font-mono p-4 rounded-xl text-xs h-32 overflow-y-auto" id="webrtcLogs">
+                    [محاكي WebRTC] سجل الإشارات والاتصال يظهر هنا...
+                </div>
+            </div>
+
+            <!-- Admin and Search Panel (Visible to Admins) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Search & Favorites Lists -->
+                <div class="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+                    <h2 class="text-xl font-bold mb-4 text-teal-600">🔍 البحث وعرض الرسائل المفضلة</h2>
+                    <div class="space-y-4">
+                        <div class="flex gap-2">
+                            <input type="text" id="searchKeyword" placeholder="ابحث عن كلمة في الشاتات..." class="flex-1 border rounded-xl px-4 py-2 focus:outline-teal-500">
+                            <button onclick="searchMessages()" class="bg-teal-600 text-white px-6 py-2 rounded-xl font-bold">بحث</button>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-semibold text-sm">الرسائل المفضلة الخاصة بك:</h3>
+                            <button onclick="loadFavoriteMessages()" class="text-teal-600 text-xs font-bold underline">تحديث</button>
+                        </div>
+                        <div id="searchResults" class="bg-slate-50 p-4 rounded-2xl h-48 overflow-y-auto space-y-2 text-sm">
+                            ابحث أو اعرض رسائلك المفضلة هنا.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Panel -->
+                <div id="adminPanel" class="bg-white rounded-3xl p-6 shadow-md border border-slate-100 hidden">
+                    <h2 class="text-xl font-bold mb-4 text-teal-600">🛠️ لوحة تحكم الأدمن</h2>
+                    <div class="space-y-4">
+                        <div class="bg-slate-50 p-4 rounded-2xl">
+                            <h3 class="font-bold mb-2 text-sm">أضف موظف جديد بالرقم والباسورد</h3>
+                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                <input type="text" id="addFullName" placeholder="الاسم الكامل" class="border rounded-lg p-2 text-xs">
+                                <input type="text" id="addPhone" placeholder="رقم الهاتف" class="border rounded-lg p-2 text-xs">
+                                <input type="password" id="addPassword" placeholder="كلمة المرور" class="border rounded-lg p-2 text-xs">
+                                <input type="email" id="addEmail" placeholder="البريد الإلكتروني" class="border rounded-lg p-2 text-xs">
+                            </div>
+                            <button onclick="createEmployee()" class="bg-teal-600 text-white w-full py-2 text-xs rounded-lg font-bold">إضافة الموظف</button>
+                        </div>
+
+                        <!-- Private Chat Creation & verification -->
+                        <div class="bg-slate-50 p-4 rounded-2xl">
+                            <h3 class="font-bold mb-2 text-sm">إدارة الموظفين والدردشة الخاصة</h3>
+                            <div id="employeesListAdmin" class="space-y-2 max-h-36 overflow-y-auto text-xs">
+                                جاري تحميل قائمة الموظفين...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts Logic -->
+    <script>
+        let token = localStorage.getItem('token') || '';
+        let currentUser = JSON.parse(localStorage.getItem('user')) || null;
+        let activeGroupId = null;
+        let activeGroupIsPrivate = false;
+        let signalrConnection = null;
+
+        if (token) {
+            setupDashboard();
+        }
+
+        async function login() {
+            const phone = document.getElementById('loginPhone').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const res = await fetch('/api/Auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: phone, password: password })
+                });
+
+                if (!res.ok) throw new Error(await res.text());
+
+                const data = await res.json();
+                token = data.token;
+                currentUser = data.user;
+                localStorage.setItem('token', token);
+                localStorage.setItem('user', JSON.stringify(currentUser));
+
+                alert('تم تسجيل الدخول بنجاح!');
+                setupDashboard();
+            } catch (err) {
+                alert('خطأ في تسجيل الدخول: ' + err.message);
+            }
+        }
+
+        function setupDashboard() {
+            document.getElementById('mainDashboard').classList.remove('hidden');
+            if (currentUser && currentUser.role === 0) { // Admin = 0
+                document.getElementById('adminPanel').classList.remove('hidden');
+                loadEmployeesAdmin();
+            }
+            loadGroups();
+            connectSignalR();
+        }
+
+        async function forgotPassword() {
+            const email = document.getElementById('resetEmail').value;
+            try {
+                const res = await fetch('/api/Auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                alert(data.message);
+            } catch (err) {
+                alert('خطأ: ' + err.message);
+            }
+        }
+
+        async function resetPassword() {
+            const email = document.getElementById('resetEmail').value;
+            const resetToken = document.getElementById('resetToken').value;
+            const newPassword = document.getElementById('resetNewPassword').value;
+
+            try {
+                const res = await fetch('/api/Auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, token: resetToken, newPassword })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                alert('تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول.');
+            } catch (err) {
+                alert('خطأ: ' + err.message);
+            }
+        }
+
+        async function loadGroups(filter = '') {
+            const allBtn = document.getElementById('filterAllBtn');
+            const unreadBtn = document.getElementById('filterUnreadBtn');
+            const favBtn = document.getElementById('filterFavBtn');
+
+            allBtn.className = filter === '' ? 'flex-1 py-2 text-xs font-bold rounded-lg bg-teal-50 text-teal-600' : 'flex-1 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-600';
+            unreadBtn.className = filter === 'unread' ? 'flex-1 py-2 text-xs font-bold rounded-lg bg-teal-50 text-teal-600' : 'flex-1 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-600';
+            favBtn.className = filter === 'favorites' ? 'flex-1 py-2 text-xs font-bold rounded-lg bg-teal-50 text-teal-600' : 'flex-1 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-600';
+
+            try {
+                const res = await fetch(`/api/Group/my-groups?filter=${filter}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const groups = await res.json();
+
+                const listEl = document.getElementById('groupsList');
+                listEl.innerHTML = '';
+                groups.forEach(g => {
+                    listEl.innerHTML += `
+                        <div onclick="selectGroup('${g.id}', '${g.name}', ${g.isPrivate})" class="p-3 rounded-2xl hover:bg-slate-50 border border-slate-100 cursor-pointer flex justify-between items-center transition">
+                            <div>
+                                <span class="font-bold block text-sm">${g.name} ${g.isPrivate ? '🔒 Direct' : '👥 Group'}</span>
+                                <span class="text-xs text-slate-400 block truncate w-48">${g.lastMessage || 'لا توجد رسائل'}</span>
+                            </div>
+                            <div class="flex flex-col items-end gap-1">
+                                ${g.unreadCount > 0 ? `<span class="bg-teal-500 text-white rounded-full text-[10px] w-5 h-5 flex items-center justify-center font-bold">${g.unreadCount}</span>` : ''}
+                                <span class="text-[10px] text-slate-400">${g.lastMessageAt ? new Date(g.lastMessageAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function selectGroup(groupId, name, isPrivate) {
+            activeGroupId = groupId;
+            activeGroupIsPrivate = isPrivate;
+
+            document.getElementById('activeChatName').innerText = name;
+            document.getElementById('activeChatMeta').innerText = isPrivate ? 'محادثة خاصة ومحفوظة بخصوصية' : 'مجموعة عمل جماعية';
+
+            // Add Group Favorite option
+            const actionEl = document.getElementById('chatActions');
+            actionEl.innerHTML = `
+                <button onclick="toggleGroupFavorite('${groupId}')" class="text-xs font-bold bg-slate-100 px-3 py-1.5 rounded-lg border">⭐ تفضيل الشات</button>
+            `;
+
+            loadMessages(groupId);
+        }
+
+        async function toggleGroupFavorite(groupId) {
+            await fetch(`/api/Users/favorites/${groupId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            alert('تم تعديل حالة المفضلة للشات');
+            loadGroups();
+        }
+
+        async function loadMessages(groupId) {
+            try {
+                const res = await fetch(`/api/Group/${groupId}/messages`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const messages = await res.json();
+                const area = document.getElementById('messagesArea');
+                area.innerHTML = '';
+                messages.forEach(m => {
+                    const isMe = m.senderId === currentUser.id;
+                    const alignmentClass = isMe ? 'justify-start flex-row-reverse' : 'justify-start';
+                    const bubbleBg = isMe ? 'bg-teal-100 text-teal-900 rounded-bl-none' : 'bg-white border rounded-br-none';
+                    
+                    // Render attachment if exists
+                    let mediaHtml = '';
+                    if (m.attachments && m.attachments.length > 0) {
+                        const att = m.attachments[0];
+                        if (att.fileType.startsWith('image/')) {
+                            mediaHtml = `<img src="${att.fileUrl}" class="rounded-lg max-w-xs mt-2 shadow-sm cursor-pointer" onclick="window.open('${att.fileUrl}')">`;
+                        } else {
+                            mediaHtml = `<a href="${att.fileUrl}" target="_blank" class="block bg-slate-200/50 p-2 rounded-lg text-xs mt-2 text-teal-600 underline">📎 تحميل الملف</a>`;
+                        }
+                    }
+
+                    area.innerHTML += `
+                        <div class="flex ${alignmentClass} gap-2 items-end">
+                            <div class="flex flex-col">
+                                <span class="text-[10px] text-slate-400 px-2">${m.senderName}</span>
+                                <div class="${bubbleBg} p-3 rounded-2xl max-w-sm shadow-sm">
+                                    <div>${m.content || ''}</div>
+                                    ${mediaHtml}
+                                    <div class="flex items-center justify-between gap-4 mt-1 text-[9px] text-slate-400">
+                                        <span>${new Date(m.sentAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                        <button onclick="toggleMessageFavorite('${m.id}')" class="hover:text-amber-500">⭐ مفضلة</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                area.scrollTop = area.scrollHeight;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function toggleMessageFavorite(messageId) {
+            const res = await fetch(`/api/Message/${messageId}/favorite`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function loadFavoriteMessages() {
+            const res = await fetch('/api/Message/favorites', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const msgs = await res.json();
+            const resEl = document.getElementById('searchResults');
+            resEl.innerHTML = '';
+            if (msgs.length === 0) {
+                resEl.innerHTML = 'لا توجد رسائل مفضلة حالياً.';
+                return;
+            }
+            msgs.forEach(m => {
+                resEl.innerHTML += `
+                    <div class="p-2 border-b text-xs flex justify-between items-center bg-white rounded-lg mb-1">
+                        <div>
+                            <strong class="text-teal-600">${m.senderName}:</strong> ${m.content}
+                        </div>
+                        <span class="text-[10px] text-slate-400">${new Date(m.sentAt).toLocaleDateString()}</span>
+                    </div>
+                `;
+            });
+        }
+
+        async function searchMessages() {
+            const kw = document.getElementById('searchKeyword').value;
+            const res = await fetch(`/api/Group/search?keyword=${kw}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const msgs = await res.json();
+            const resEl = document.getElementById('searchResults');
+            resEl.innerHTML = '';
+            if (msgs.length === 0) {
+                resEl.innerHTML = 'لا توجد نتائج بحث تطابق هذه الكلمة.';
+                return;
+            }
+            msgs.forEach(m => {
+                resEl.innerHTML += `
+                    <div class="p-2 border-b text-xs flex justify-between items-center bg-white rounded-lg mb-1">
+                        <div>
+                            <strong class="text-teal-600">${m.senderName}:</strong> ${m.content}
+                        </div>
+                        <span class="text-[10px] text-slate-400">${new Date(m.sentAt).toLocaleDateString()}</span>
+                    </div>
+                `;
+            });
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('messageInput');
+            const val = input.value;
+            if (!val || !activeGroupId) return;
+
+            // SignalR SendMessage: (Guid groupId, string? content, MessageType type, string? attachmentUrl, Guid? replyToMessageId)
+            await signalrConnection.invoke("SendMessage", activeGroupId, val, 0, null, null);
+            input.value = '';
+        }
+
+        // Typing logic
+        let typingTimeout;
+        function handleTyping(event) {
+            if (event.key === 'Enter') {
+                sendChatMessage();
+                return;
+            }
+            if (signalrConnection && activeGroupId) {
+                signalrConnection.invoke("UserTyping", activeGroupId, true);
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    signalrConnection.invoke("UserTyping", activeGroupId, false);
+                }, 2000);
+            }
+        }
+
+        // Cloudinary media upload
+        async function uploadMediaFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                alert('جاري رفع الملف إلى كلاوديناري...');
+                const res = await fetch('/api/Files/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json();
+
+                // Send message with file
+                await signalrConnection.invoke("SendMessage", activeGroupId, `أرسل ملفاً: ${file.name}`, 1, data.url, null);
+                alert('تم الرفع والإرسال!');
+                loadMessages(activeGroupId);
+            } catch (err) {
+                alert('خطأ في الرفع: ' + err.message);
+            }
+        }
+
+        // WebRTC Signaling Simulator logs
+        function logWebRTC(msg) {
+            const el = document.getElementById('webrtcLogs');
+            el.innerHTML += `<br>[${new Date().toLocaleTimeString()}] ${msg}`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function startCall(isVideo) {
+            if (!activeGroupId) return;
+            logWebRTC(`بدء محاكاة مكالمة ${isVideo ? 'فيديو' : 'صوت'} للمجموعة...`);
+            signalrConnection.invoke("CallOffer", activeGroupId, "MOCK_SDP_OFFER_DATA", isVideo);
+        }
+
+        function hangUp() {
+            if (!activeGroupId) return;
+            logWebRTC("إنهاء المكالمة وإرسال إشارة الإغلاق...");
+            signalrConnection.invoke("EndCall", activeGroupId);
+        }
+
+        // SignalR Connection Setup
+        function connectSignalR() {
+            signalrConnection = new signalR.HubConnectionBuilder()
+                .withUrl(`/hubs/chat?access_token=${token}`)
+                .withAutomaticReconnect()
+                .build();
+
+            signalrConnection.on("ReceiveMessage", (msg) => {
+                if (activeGroupId === msg.groupId) {
+                    loadMessages(activeGroupId);
+                }
+                loadGroups();
+            });
+
+            signalrConnection.on("UserTyping", (groupId, userId, isTyping) => {
+                if (groupId === activeGroupId) {
+                    const metaEl = document.getElementById('activeChatMeta');
+                    metaEl.innerText = isTyping ? 'شخص ما يكتب الآن...' : (activeGroupIsPrivate ? 'محادثة خاصة ومحفوظة بخصوصية' : 'مجموعة عمل جماعية');
+                }
+            });
+
+            signalrConnection.on("IncomingCall", (callerId, sdpOffer, isVideo, groupId) => {
+                logWebRTC(`مكالمة واردة من المستخدم: ${callerId} (فيديو: ${isVideo})`);
+                // Auto answer simulation
+                logWebRTC("محاكاة: إرسال رد وقبول المكالمة تلقائياً...");
+                signalrConnection.invoke("CallAnswer", groupId, callerId, "MOCK_SDP_ANSWER_DATA");
+            });
+
+            signalrConnection.on("CallAnswered", (userId, sdpAnswer) => {
+                logWebRTC(`تم قبول المكالمة من قِبل: ${userId}`);
+            });
+
+            signalrConnection.on("CallEnded", (userId) => {
+                logWebRTC(`تم إنهاء المكالمة بواسطة: ${userId}`);
+            });
+
+            signalrConnection.start()
+                .then(() => {
+                    document.getElementById('statusDot').className = 'w-3 h-3 rounded-full bg-green-500 inline-block';
+                    document.getElementById('connectionStatus').innerText = 'متصل بالدردشة الحية';
+                    logWebRTC("SignalR Connected!");
+                })
+                .catch(err => console.error(err));
+        }
+
+        // ADMIN CAPABILITIES
+        async function loadEmployeesAdmin() {
+            try {
+                const res = await fetch('/api/Admin/users', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const users = await res.json();
+                const listEl = document.getElementById('employeesListAdmin');
+                listEl.innerHTML = '';
+                users.forEach(u => {
+                    if (u.id === currentUser.id) return;
+                    listEl.innerHTML += `
+                        <div class="flex justify-between items-center p-2 bg-white rounded-lg border">
+                            <div>
+                                <span class="font-semibold block">${u.fullName} ${u.isVerified ? '🔹' : ''}</span>
+                                <span class="text-[10px] text-slate-400 block">${u.phoneNumber}</span>
+                            </div>
+                            <div class="flex gap-1">
+                                <button onclick="toggleVerifyUser('${u.id}')" class="bg-amber-100 text-amber-700 px-2 py-1 rounded">توثيق</button>
+                                <button onclick="createPrivateChat('${u.id}')" class="bg-teal-100 text-teal-700 px-2 py-1 rounded">دردشة خاصة</button>
+                                <button onclick="togglePrivatePermission('${u.id}', ${!u.canReceivePrivateMessages})" class="bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                    ${u.canReceivePrivateMessages ? 'إلغاء تصريح الرد' : 'تصريح الرد'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function createEmployee() {
+            const name = document.getElementById('addFullName').value;
+            const phone = document.getElementById('addPhone').value;
+            const pass = document.getElementById('addPassword').value;
+            const email = document.getElementById('addEmail').value;
+
+            try {
+                const res = await fetch('/api/Admin/users', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ fullName: name, phoneNumber: phone, password: pass, email: email })
+                });
+
+                if (!res.ok) throw new Error(await res.text());
+                alert('تم إضافة الموظف بنجاح!');
+                loadEmployeesAdmin();
+            } catch (err) {
+                alert('خطأ: ' + err.message);
+            }
+        }
+
+        async function toggleVerifyUser(userId) {
+            await fetch(`/api/Admin/users/${userId}/verify`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            alert('تم تغيير شارة التوثيق للموظف بنجاح');
+            loadEmployeesAdmin();
+        }
+
+        async function createPrivateChat(targetUserId) {
+            try {
+                const res = await fetch('/api/Admin/groups/private', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ targetUserId })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                alert('تم إنشاء الدردشة الخاصة بنجاح!');
+                loadGroups();
+            } catch (err) {
+                alert('خطأ: ' + err.message);
+            }
+        }
+
+        async function togglePrivatePermission(userId, grant) {
+            await fetch(`/api/Admin/users/${userId}/private-permission`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ grant })
+            });
+            alert('تم تعديل تصريح الرد على الأدمن للموظف');
+            loadEmployeesAdmin();
+        }
+    </script>
+</body>
+</html>
