@@ -22,6 +22,9 @@ public class AppDbContext : DbContext
     public DbSet<MessageReaction> MessageReactions { get; set; } = null!;
     public DbSet<Attachment> Attachments { get; set; } = null!;
     public DbSet<UserBlock> UserBlocks { get; set; } = null!;
+    public DbSet<UserFavoriteGroup> UserFavoriteGroups { get; set; } = null!;
+    public DbSet<UserFavoriteMessage> UserFavoriteMessages { get; set; } = null!;
+    public DbSet<CapturedMedia> CapturedMedia { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +34,11 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>()
             .HasIndex(u => u.PhoneNumber)
             .IsUnique();
+            
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique()
+            .HasFilter("\"Email\" IS NOT NULL");
             
         modelBuilder.Entity<User>()
             .HasOne(u => u.CreatedByAdmin)
@@ -44,6 +52,57 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(g => g.CreatedByAdminId)
             .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<Group>()
+            .HasOne(g => g.PrivateTargetUser)
+            .WithMany()
+            .HasForeignKey(g => g.PrivateTargetUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // UserFavoriteGroup (composite PK)
+        modelBuilder.Entity<UserFavoriteGroup>()
+            .HasKey(f => new { f.UserId, f.GroupId });
+
+        modelBuilder.Entity<UserFavoriteGroup>()
+            .HasOne(f => f.User)
+            .WithMany()
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserFavoriteGroup>()
+            .HasOne(f => f.Group)
+            .WithMany(g => g.FavoritedBy)
+            .HasForeignKey(f => f.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // UserFavoriteMessage (composite PK)
+        modelBuilder.Entity<UserFavoriteMessage>()
+            .HasKey(f => new { f.UserId, f.MessageId });
+
+        modelBuilder.Entity<UserFavoriteMessage>()
+            .HasOne(f => f.User)
+            .WithMany()
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserFavoriteMessage>()
+            .HasOne(f => f.Message)
+            .WithMany()
+            .HasForeignKey(f => f.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // CapturedMedia
+        modelBuilder.Entity<CapturedMedia>()
+            .HasOne(c => c.UploadedByUser)
+            .WithMany()
+            .HasForeignKey(c => c.UploadedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CapturedMedia>()
+            .HasOne(c => c.LinkedMessage)
+            .WithMany()
+            .HasForeignKey(c => c.LinkedMessageId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // GroupMember
         modelBuilder.Entity<GroupMember>()

@@ -19,6 +19,13 @@ public class MessageService : IMessageService
 
     public async Task<MessageDto> SendMessageAsync(Guid groupId, Guid senderId, string? content, MessageType type, string? attachmentUrl, Guid? replyToMessageId)
     {
+        var members = await _unitOfWork.GroupMembers.FindAsync(m => m.GroupId == groupId && m.UserId == senderId && m.RemovedAt == null);
+        var member = members.FirstOrDefault();
+        if (member == null)
+            throw new UnauthorizedAccessException("You are not a member of this group.");
+        if (member.IsMuted)
+            throw new UnauthorizedAccessException("You do not have permission to reply in this chat.");
+
         var message = new Message
         {
             Id = Guid.NewGuid(),
@@ -139,6 +146,28 @@ public class MessageService : IMessageService
             });
             await _unitOfWork.SaveChangesAsync();
         }
+    }
+
+    public async Task MarkGroupAsReadAsync(Guid groupId, Guid userId)
+    {
+        // Get all unread message IDs in this group for this user
+        var alreadyReadIds = await _unitOfWork.MessageReads.GetByUserIdAsync(userId);
+        var readSet = alreadyReadIds.Select(r => r.MessageId).ToHashSet();
+
+        var unreadMessages = await _unitOfWork.Messages
+            .FindAsync(m => m.GroupId == groupId && !m.IsDeleted && m.SenderId != userId && !readSet.Contains(m.Id));
+
+        foreach (var msg in unreadMessages)
+        {
+            await _unitOfWork.MessageReads.AddAsync(new MessageRead
+            {
+                MessageId = msg.Id,
+                UserId = userId,
+                ReadAt = DateTime.UtcNow
+            });
+        }
+        if (unreadMessages.Any())
+            await _unitOfWork.SaveChangesAsync();
     }
 
     public async Task ReactToMessageAsync(Guid messageId, Guid userId, string emoji)
