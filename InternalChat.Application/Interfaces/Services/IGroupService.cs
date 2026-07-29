@@ -10,5 +10,7 @@ public interface IGroupService
     Task MuteMemberAsync(Guid groupId, Guid userId, bool isMuted);
     
     Task<IEnumerable<GroupDto>> GetUserGroupsAsync(Guid userId);
+    Task<IEnumerable<GroupDto>> GetUserGroupsFilteredAsync(Guid userId, string? filter);
     Task<IEnumerable<GroupMemberDto>> GetGroupMembersAsync(Guid groupId, Guid callerUserId);
+    Task<IEnumerable<MessageDto>> SearchMessagesAsync(Guid userId, string keyword);
 }
