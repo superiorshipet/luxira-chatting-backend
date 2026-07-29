@@ -10,6 +10,7 @@ public interface IMessageService
     Task DeleteMessageAsync(Guid messageId, Guid callerUserId);
     Task PinMessageAsync(Guid messageId, Guid callerUserId, bool isPinned);
     Task MarkAsReadAsync(Guid messageId, Guid userId);
+    Task MarkGroupAsReadAsync(Guid groupId, Guid userId);
     Task ReactToMessageAsync(Guid messageId, Guid userId, string emoji);
     Task<IEnumerable<MessageDto>> ForwardMessageAsync(Guid messageId, Guid forwarderId, IEnumerable<Guid> targetGroupIds);
     Task<IEnumerable<MessageDto>> GetMessagesAsync(Guid groupId, Guid callerUserId, DateTime beforeCursor, int take);

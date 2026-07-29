@@ -66,6 +66,16 @@ public class ChatHub : Hub
         await Clients.Group(groupId.ToString()).SendAsync("ReceiveMessage", message);
     }
 
+    public async Task JoinGroup(Guid groupId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupId.ToString());
+    }
+
+    public async Task LeaveGroup(Guid groupId)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupId.ToString());
+    }
+
     public async Task EditMessage(Guid messageId, string newContent)
     {
         var userId = GetUserId();
@@ -110,5 +120,45 @@ public class ChatHub : Hub
         var userId = GetUserId();
         await _messageService.PinMessageAsync(messageId, userId, isPinned);
         await Clients.Group(groupId.ToString()).SendAsync("MessagePinned", groupId, messageId, isPinned);
+    }
+
+    public async Task UserTyping(Guid groupId, bool isTyping)
+    {
+        var userId = GetUserId();
+        await Clients.GroupExcept(groupId.ToString(), Context.ConnectionId)
+            .SendAsync("UserTyping", groupId, userId, isTyping);
+    }
+
+    // ─────────────── WebRTC Signaling (Voice & Video Calls) ───────────────
+    // The Admin initiates calls. Peers signal each other through the server.
+
+    /// <summary>Initiate a call to a group or specific user. Sends an offer SDP.</summary>
+    public async Task CallOffer(Guid targetGroupId, string sdpOffer, bool isVideo)
+    {
+        var callerId = GetUserId();
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
+            .SendAsync("IncomingCall", callerId, sdpOffer, isVideo, targetGroupId);
+    }
+
+    /// <summary>Answer a call with an SDP answer.</summary>
+    public async Task CallAnswer(Guid targetGroupId, Guid callerId, string sdpAnswer)
+    {
+        // Send answer back to the caller's group connection
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
+            .SendAsync("CallAnswered", GetUserId(), sdpAnswer);
+    }
+
+    /// <summary>Exchange ICE candidates for NAT traversal.</summary>
+    public async Task SendIceCandidate(Guid targetGroupId, string candidate)
+    {
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
+            .SendAsync("IceCandidate", GetUserId(), candidate);
+    }
+
+    /// <summary>End an ongoing call.</summary>
+    public async Task EndCall(Guid targetGroupId)
+    {
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
+            .SendAsync("CallEnded", GetUserId());
     }
 }

@@ -5,6 +5,7 @@ using InternalChat.Application.Services;
 using InternalChat.Infrastructure.Identity;
 using InternalChat.Infrastructure.Persistence;
 using InternalChat.Infrastructure.Persistence.Repositories;
+using InternalChat.Infrastructure.Storage;
 using InternalChat.Infrastructure.Caching;
 using InternalChat.Infrastructure.SignalR;
 using InternalChat.API.Hubs;
@@ -14,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -21,6 +23,18 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200", "http://localhost:5500", "http://127.0.0.1:5500")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // SignalR needs credentials
+    });
+});
 
 // Configure Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
@@ -40,6 +54,8 @@ builder.Services.AddScoped<IMessageReadRepository, MessageReadRepository>();
 builder.Services.AddScoped<IMessageReactionRepository, MessageReactionRepository>();
 builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 builder.Services.AddScoped<IUserBlockRepository, UserBlockRepository>();
+builder.Services.AddScoped<IUserQueryRepository, UserQueryRepository>();
+builder.Services.AddScoped<IGroupQueryRepository, GroupQueryRepository>();
 
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
@@ -48,8 +64,9 @@ builder.Services.AddScoped<IChatNotifier, ChatNotifier>();
 builder.Services.AddSingleton<IJwtProvider, JwtProvider>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<IPresenceTracker, PresenceTracker>();
-builder.Services.AddSingleton<IFileStorage, InternalChat.Infrastructure.Storage.LocalFileStorage>();
+builder.Services.AddScoped<IFileStorage, InternalChat.Infrastructure.Storage.CloudinaryService>();
 builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 // Configure JWT Authentication
 var secretKey = builder.Configuration["Jwt:SecretKey"] ?? "InternalChatSuperSecretKey_1234567890_PleaseChangeMe!";
@@ -97,7 +114,9 @@ app.UseSwaggerUI(c =>
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "InternalChat API V1");
 });
 
+app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
