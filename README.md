@@ -91,10 +91,10 @@ Base URL: `http://localhost:<port>/api`
   * **Body:** `{ "isMuted": true }`
 
 ### 4. Message Operations
-*Requires Standard user JWT `[Authorize]`*
+*Requires Admin JWT `[Authorize(Roles = "Admin")]`*
 
 * **`GET /api/Message/{messageId}/history`**
-  * **Description:** Retrieves the edit history of a specific message.
+  * **Description:** Retrieves the complete edit history of a specific message. This is strictly reserved for Administrators.
 
 ### 5. Attachments
 *Requires Standard user JWT `[Authorize]`*
