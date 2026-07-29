@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="InternalChat.API/InternalChat.API.csproj" />
+  <Project Path="InternalChat.Application/InternalChat.Application.csproj" />
+  <Project Path="InternalChat.Domain/InternalChat.Domain.csproj" />
+  <Project Path="InternalChat.Infrastructure/InternalChat.Infrastructure.csproj" />
+</Solution>
