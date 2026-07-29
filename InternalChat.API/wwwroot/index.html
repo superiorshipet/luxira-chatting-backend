@@ -88,6 +88,37 @@
             </div>
         </section>
 
+        <!-- Incoming Call Modal -->
+        <div id="incomingCallModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md hidden z-50 flex items-center justify-center">
+            <div class="bg-white rounded-3xl shadow-2xl p-8 w-[400px] max-w-full mx-4 border text-center relative overflow-hidden">
+                <div class="absolute inset-0 bg-teal-500/10 animate-pulse pointer-events-none"></div>
+                <div class="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce shadow-lg">
+                    <span id="incomingCallIcon" class="text-4xl">📞</span>
+                </div>
+                <h3 class="text-2xl font-extrabold mb-2 text-slate-800">مكالمة واردة</h3>
+                <p id="incomingCallText" class="text-slate-600 mb-8 font-semibold">مكالمة من ...</p>
+                <div class="flex gap-4 justify-center relative z-10">
+                    <button id="btnAcceptCall" class="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-500/30 hover:bg-green-600 transition transform hover:scale-105 flex items-center justify-center gap-2">
+                        <span>📞</span> رد
+                    </button>
+                    <button id="btnRejectCall" class="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-red-500/30 hover:bg-red-600 transition transform hover:scale-105 flex items-center justify-center gap-2">
+                        <span>✖</span> رفض
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Participant Modal -->
+        <div id="addParticipantModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center">
+            <div class="bg-white rounded-3xl shadow-2xl p-6 w-[400px] max-w-full mx-4 border">
+                <h3 class="text-xl font-bold mb-4 text-slate-800 border-b pb-2 text-teal-600">➕ إضافة مشارك للمكالمة</h3>
+                <div id="addParticipantList" class="space-y-2 max-h-64 overflow-y-auto mb-4">
+                    <!-- Employees will be loaded here -->
+                </div>
+                <button onclick="closeAddParticipantModal()" class="w-full bg-slate-200 text-slate-700 py-2 rounded-xl font-bold hover:bg-slate-300">إلغاء</button>
+            </div>
+        </div>
+
         <!-- Main Dashboard Area (Only visible after login) -->
         <div id="mainDashboard" class="hidden space-y-8">
             
@@ -166,22 +197,20 @@
 
                     <!-- Messages Area -->
                     <div class="flex-1 relative flex flex-col min-h-0 bg-slate-50 rounded-2xl mb-4 p-2">
-                        <div id="webrtcCallScreen" class="absolute inset-0 bg-slate-900 rounded-2xl hidden flex-col items-center justify-center p-4 z-10">
-                            <!-- Main Video (Remote Camera or Screen) -->
-                            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-contain rounded-xl bg-black"></video>
-                            
-                            <!-- PIP Remote Camera (when screen is main) -->
-                            <video id="remoteCameraVideo" autoplay playsinline class="absolute top-4 left-4 w-32 h-24 object-cover rounded-lg border-2 border-blue-500 bg-black z-20 hidden shadow-lg"></video>
+                        <div id="webrtcCallScreen" class="absolute inset-0 bg-slate-900 rounded-2xl hidden flex-col p-4 z-10">
+                            <!-- Video Grid for Mesh -->
+                            <div id="videoGrid" class="flex-1 grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 auto-rows-fr mb-16 overflow-y-auto">
+                                <!-- Remote videos will be injected here -->
+                            </div>
 
                             <!-- PIP Local Camera -->
-                            <video id="localVideo" autoplay muted playsinline class="absolute top-4 right-4 w-32 h-24 object-cover rounded-lg border-2 border-teal-500 bg-black z-20 shadow-lg"></video>
-                            
-                            <!-- PIP Local Screen -->
-                            <video id="localScreenVideo" autoplay muted playsinline class="absolute bottom-24 right-4 w-32 h-24 object-cover rounded-lg border-2 border-green-500 bg-black z-20 hidden shadow-lg"></video>
-                            <div class="absolute bottom-6 flex gap-4 z-20">
+                            <video id="localVideo" autoplay muted playsinline class="absolute top-4 left-4 w-32 h-24 object-cover rounded-lg border-2 border-teal-500 bg-black z-[60] shadow-lg hidden"></video>
+
+                            <div class="absolute bottom-6 left-0 right-0 flex justify-center gap-4 z-[60]">
                                 <button onclick="toggleAudio()" id="btnToggleAudio" class="bg-slate-700 text-white p-3 rounded-full hover:bg-slate-600 font-bold shadow-lg flex items-center justify-center w-12 h-12" title="كتم/تشغيل الميكروفون">🎙️</button>
                                 <button onclick="toggleVideo()" id="btnToggleVideo" class="bg-slate-700 text-white p-3 rounded-full hover:bg-slate-600 font-bold shadow-lg flex items-center justify-center w-12 h-12" title="إيقاف/تشغيل الكاميرا">📹</button>
                                 <button onclick="toggleScreenShare()" id="btnToggleScreen" class="bg-slate-700 text-white p-3 rounded-full hover:bg-slate-600 font-bold shadow-lg flex items-center justify-center w-12 h-12" title="مشاركة الشاشة">💻</button>
+                                <button id="btnAddParticipant" onclick="addParticipantToCall()" class="bg-blue-500 text-white p-3 rounded-full hover:bg-blue-600 font-bold shadow-lg flex items-center justify-center px-4 hidden">➕ إضافة أشخاص</button>
                                 <button onclick="hangUp()" class="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 font-bold shadow-lg flex items-center justify-center px-6">🛑 إنهاء المكالمة</button>
                             </div>
                         </div>
@@ -1005,55 +1034,125 @@
             }, 'image/jpeg', 0.85);
         }
 
-        // --- WEBRTC CALLING LOGIC ---
+        // --- WEBRTC CALLING LOGIC (MESH) ---
         let localStream = null;
         let screenStream = null;
-        let remoteCameraStream = null;
-        let remoteScreenStream = null;
-        let peerConnection = null;
-        let iceCandidateQueue = [];
+        const peerConnections = {}; // userId -> RTCPeerConnection
+        const iceCandidateQueues = {}; // userId -> []
 
-        function setupPeerConnectionHandlers() {
-            peerConnection.ontrack = (event) => {
-                logWebRTC("تم استقبال مسار جديد (Remote Track Received)");
-                const stream = event.streams[0];
+        function getPeerConnection(userId) {
+            if (peerConnections[userId]) return peerConnections[userId];
+
+            const pc = new RTCPeerConnection(rtcConfig);
+            peerConnections[userId] = pc;
+            iceCandidateQueues[userId] = [];
+
+            pc.ontrack = (event) => {
+                logWebRTC(`تم استقبال مسار ${event.track.kind} من ${userId}`);
                 const track = event.track;
-                const remoteVid = document.getElementById('remoteVideo');
-                const remoteCam = document.getElementById('remoteCameraVideo');
-
-                if (!remoteCameraStream) {
-                    remoteCameraStream = stream;
-                    remoteVid.srcObject = null;
-                    remoteVid.srcObject = remoteCameraStream;
-                    remoteVid.classList.remove('hidden');
-                    remoteVid.play().catch(e => console.error("Autoplay prevented:", e));
-                } else if (stream.id !== remoteCameraStream.id) {
-                    remoteScreenStream = stream;
+                
+                let container = document.getElementById(`vid-container-${userId}`);
+                if (!container) {
+                    container = document.createElement('div');
+                    container.id = `vid-container-${userId}`;
+                    container.className = 'relative bg-black rounded-xl overflow-hidden shadow-lg aspect-video flex items-center justify-center transition-all duration-300';
                     
-                    remoteCam.srcObject = null;
-                    remoteCam.srcObject = remoteCameraStream;
-                    remoteCam.classList.remove('hidden');
-                    remoteCam.play().catch(e => console.error(e));
+                    const nameLabel = document.createElement('div');
+                    nameLabel.className = 'absolute bottom-2 left-2 bg-slate-900/70 text-white text-[10px] px-2 py-1 rounded-lg z-30 font-bold';
+                    nameLabel.innerText = userId.split('-')[0]; // short ID for display
+                    container.appendChild(nameLabel);
 
-                    remoteVid.srcObject = null;
-                    remoteVid.srcObject = remoteScreenStream;
-                    remoteVid.play().catch(e => console.error(e));
+                    document.getElementById('videoGrid').appendChild(container);
+                }
+
+                if (track.kind === 'audio') {
+                    let audioEl = document.getElementById(`aud-${userId}`);
+                    if (!audioEl) {
+                        audioEl = document.createElement('audio');
+                        audioEl.id = `aud-${userId}`;
+                        audioEl.autoplay = true;
+                        container.appendChild(audioEl);
+                    }
+                    audioEl.srcObject = new MediaStream([track]);
+                } else if (track.kind === 'video') {
+                    let existingCam = document.getElementById(`vid-${userId}-cam`);
                     
-                    track.onmute = () => {
-                        remoteScreenStream = null;
-                        remoteVid.srcObject = remoteCameraStream;
-                        remoteCam.srcObject = null;
-                        remoteCam.classList.add('hidden');
-                    };
+                    if (!existingCam) {
+                        // First video track -> Camera
+                        existingCam = document.createElement('video');
+                        existingCam.id = `vid-${userId}-cam`;
+                        existingCam.autoplay = true;
+                        existingCam.playsInline = true;
+                        existingCam.className = 'w-full h-full object-contain';
+                        existingCam.srcObject = new MediaStream([track]);
+                        container.appendChild(existingCam);
+                        existingCam.play().catch(e=>e);
+                    } else {
+                        // Second video track -> Screen Share
+                        let screenVid = document.getElementById(`vid-${userId}-screen`);
+                        if (!screenVid) {
+                            screenVid = document.createElement('video');
+                            screenVid.id = `vid-${userId}-screen`;
+                            screenVid.autoplay = true;
+                            screenVid.playsInline = true;
+                            screenVid.className = 'w-full h-full object-contain z-10 relative bg-black';
+                            container.appendChild(screenVid);
+                            
+                            // Make screen share fill only the call screen (not the whole site)
+                            container.classList.remove('aspect-video', 'relative');
+                            container.classList.add('absolute', 'inset-0', 'z-[40]', 'bg-slate-900', 'rounded-2xl');
+                            
+                            // Move cam to PIP
+                            existingCam.className = 'absolute top-4 right-4 w-32 h-24 object-cover border-2 border-blue-500 rounded-lg z-[55] shadow-2xl';
+                        }
+                        screenVid.srcObject = new MediaStream([track]);
+                        screenVid.play().catch(e=>e);
+                        
+                        track.onmute = () => {
+                            // Some browsers fire onmute when the track ends
+                            screenVid.remove();
+                            existingCam.className = 'w-full h-full object-contain';
+                            // Revert fullscreen
+                            container.classList.remove('absolute', 'inset-0', 'z-[40]', 'bg-slate-900', 'rounded-2xl');
+                            container.classList.add('relative', 'aspect-video');
+                        };
+                        track.onended = track.onmute;
+                    }
                 }
             };
 
-            peerConnection.onicecandidate = (event) => {
+            pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                    signalrConnection.invoke("SendIceCandidate", activeGroupId, JSON.stringify(event.candidate))
+                    // FIX: Pass activeGroupId, userId (targetUserId), and candidate string
+                    signalrConnection.invoke("SendIceCandidate", activeGroupId, userId, JSON.stringify(event.candidate))
                         .catch(err => console.error(err));
                 }
             };
+
+            pc.onconnectionstatechange = () => {
+                logWebRTC(`حالة الاتصال مع ${userId}: ${pc.connectionState}`);
+                if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                    removePeer(userId);
+                }
+            };
+
+            return pc;
+        }
+
+        function removePeer(userId) {
+            const pc = peerConnections[userId];
+            if (pc) {
+                pc.close();
+                delete peerConnections[userId];
+            }
+            delete iceCandidateQueues[userId];
+            const container = document.getElementById(`vid-container-${userId}`);
+            if (container) container.remove();
+
+            // Auto-hangup if everyone left
+            if (Object.keys(peerConnections).length === 0) {
+                hangUp(false);
+            }
         }
 
         function createDummyVideoTrack() {
@@ -1069,20 +1168,17 @@
                 ctx.font = '30px Arial';
                 ctx.fillText('Audio Call...', 240, 240);
                 
-                // Add a moving element to ensure frames aren't identical (forces encoder to send)
-                ctx.fillStyle = '#0f766e';
                 const time = Date.now() / 1000;
+                ctx.fillStyle = '#0f766e';
                 ctx.beginPath();
                 ctx.arc(320 + Math.sin(time) * 100, 300, 10, 0, Math.PI * 2);
                 ctx.fill();
-
                 requestAnimationFrame(draw);
             }
             draw();
-
-            const stream = canvas.captureStream(15); // 15 fps to keep connection alive
+            const stream = canvas.captureStream(15);
             const track = stream.getVideoTracks()[0];
-            track.enabled = true; // Must be enabled so frames flow, but we can mute it locally if needed
+            track.isDummy = true; // Mark as dummy so we know it can be replaced
             return track;
         }
 
@@ -1097,6 +1193,7 @@
             if (!activeGroupId) return alert('يرجى اختيار محادثة للاتصال');
             logWebRTC(`بدء الاتصال (فيديو: ${isVideo})...`);
             
+            window.currentCallIsVideo = isVideo;
             document.getElementById('webrtcCallScreen').classList.remove('hidden');
 
             try {
@@ -1107,21 +1204,33 @@
                 const localVid = document.getElementById('localVideo');
                 localVid.srcObject = localStream;
                 localVid.classList.remove('hidden');
-                localVid.play().catch(e => console.error("Local video play error:", e));
+                localVid.play().catch(e => e);
 
-                peerConnection = new RTCPeerConnection(rtcConfig);
+                document.getElementById('videoGrid').innerHTML = '';
                 
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
+                if (currentUser && currentUser.role === 0) {
+                    document.getElementById('btnAddParticipant').classList.remove('hidden');
+                }
+
+                logWebRTC("جلب أعضاء المحادثة للاتصال بهم مباشرة...");
+                
+                // Fetch group members and invite them individually!
+                const res = await fetch(`${backendUrl}/api/Group/${activeGroupId}/members`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-
-                setupPeerConnectionHandlers();
-
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-
-                logWebRTC("إرسال Offer عبر SignalR...");
-                signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), isVideo);
+                
+                if (res.ok) {
+                    const members = await res.json();
+                    members.forEach(member => {
+                        if (member.userId !== currentUser.id) {
+                            inviteUserToCall(member.userId);
+                        }
+                    });
+                } else {
+                    logWebRTC("تعذر جلب أعضاء المجموعة، سيتم الإرسال كبث عام.");
+                    signalrConnection.invoke("CallOffer", activeGroupId, "BROADCAST", isVideo, null);
+                }
+                
             } catch (err) {
                 alert("فشل في بدء المكالمة: " + err.message);
                 hangUp();
@@ -1129,92 +1238,240 @@
         }
 
         async function handleIncomingCall(callerId, sdpOffer, isVideo, groupId) {
-            if (callerId === currentUser.id) return; // Prevent self-calling loop
+            if (callerId === currentUser.id) return;
             
-            if (peerConnection && peerConnection.signalingState !== "closed") {
-                logWebRTC("تحديث إعدادات المكالمة (Renegotiation)...");
-                try {
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpOffer)));
-                    processIceQueue();
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    signalrConnection.invoke("CallAnswer", groupId, callerId, JSON.stringify(answer));
-                } catch (e) {
-                    console.error("Renegotiation failed", e);
+            // Check if this is a renegotiation (screen share etc)
+            const existingPc = peerConnections[callerId];
+            if (existingPc && existingPc.signalingState !== "closed" && (existingPc.remoteDescription || existingPc.isAnswering)) {
+                if (existingPc.remoteDescription && sdpOffer !== "BROADCAST") {
+                    logWebRTC(`تحديث إعدادات المكالمة من ${callerId} (Renegotiation)`);
+                    try {
+                        await existingPc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpOffer)));
+                        processIceQueue(callerId);
+                        const answer = await existingPc.createAnswer();
+                        await existingPc.setLocalDescription(answer);
+                        signalrConnection.invoke("CallAnswer", groupId, callerId, JSON.stringify(answer));
+                    } catch (e) { console.error(e); }
                 }
                 return;
             }
 
-            logWebRTC(`مكالمة واردة من ${callerId}. يرجى الرد...`);
-            const accept = confirm(`لديك مكالمة ${isVideo ? 'فيديو' : 'صوتية'} واردة. هل تريد الرد؟\n(يجب الضغط على موافق لتفعيل الصوت والصورة)`);
-            if (!accept) {
-                logWebRTC("تم رفض المكالمة.");
-                return;
-            }
-
-            activeGroupId = groupId; // Align active chat state for the incoming call
-            document.getElementById('webrtcCallScreen').classList.remove('hidden');
-
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
-                if (!isVideo) {
-                    localStream.addTrack(createDummyVideoTrack());
+            // If we are NOT in the call, show the modal exactly like WhatsApp with ringing sound
+            if (!localStream) {
+                logWebRTC(`مكالمة واردة من ${callerId}.`);
+                
+                document.getElementById('incomingCallIcon').innerText = isVideo ? '📹' : '📞';
+                document.getElementById('incomingCallText').innerText = `مكالمة ${isVideo ? 'فيديو' : 'صوتية'} واردة...`;
+                document.getElementById('incomingCallModal').classList.remove('hidden');
+                
+                // Play ringtone
+                let ringtone = document.getElementById('ringtoneAudio');
+                if (!ringtone) {
+                    ringtone = document.createElement('audio');
+                    ringtone.id = 'ringtoneAudio';
+                    // Using a standard free ringing sound URL
+                    ringtone.src = 'https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg';
+                    ringtone.loop = true;
+                    document.body.appendChild(ringtone);
                 }
-                const localVid = document.getElementById('localVideo');
-                localVid.srcObject = localStream;
-                localVid.classList.remove('hidden');
-                localVid.play().catch(e => console.error("Local video play error:", e));
+                ringtone.play().catch(e => console.warn("Ringtone autoplay prevented"));
+                
+                // One-time event listeners for the modal
+                const acceptBtn = document.getElementById('btnAcceptCall');
+                const rejectBtn = document.getElementById('btnRejectCall');
+                
+                const cleanupModal = () => {
+                    document.getElementById('incomingCallModal').classList.add('hidden');
+                    const r = document.getElementById('ringtoneAudio');
+                    if (r) { r.pause(); r.currentTime = 0; }
+                    acceptBtn.replaceWith(acceptBtn.cloneNode(true));
+                    rejectBtn.replaceWith(rejectBtn.cloneNode(true));
+                };
 
-                peerConnection = new RTCPeerConnection(rtcConfig);
-
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
+                document.getElementById('btnAcceptCall').addEventListener('click', () => {
+                    cleanupModal();
+                    acceptIncomingCall(callerId, sdpOffer, isVideo, groupId);
                 });
 
-                setupPeerConnectionHandlers();
+                document.getElementById('btnRejectCall').addEventListener('click', () => {
+                    cleanupModal();
+                    logWebRTC("تم رفض المكالمة.");
+                });
+                return;
+            }
 
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpOffer)));
-                processIceQueue();
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
+            // If already in call, Auto-accept
+            acceptIncomingCall(callerId, sdpOffer, isVideo, groupId);
+        }
 
-                logWebRTC("إرسال Answer للقبول...");
-                signalrConnection.invoke("CallAnswer", groupId, callerId, JSON.stringify(answer));
+        async function acceptIncomingCall(callerId, sdpOffer, isVideo, groupId) {
+            activeGroupId = groupId;
+            document.getElementById('webrtcCallScreen').classList.remove('hidden');
+            
+            if (currentUser && currentUser.role === 0) {
+                document.getElementById('btnAddParticipant').classList.remove('hidden');
+            }
+
+            if (!localStream) {
+                document.getElementById('videoGrid').innerHTML = '';
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+                    if (!isVideo) {
+                        localStream.addTrack(createDummyVideoTrack());
+                    }
+                    const localVid = document.getElementById('localVideo');
+                    localVid.srcObject = localStream;
+                    localVid.classList.remove('hidden');
+                    localVid.play().catch(e=>e);
+                } catch(e) {
+                    alert("فشل الوصول للكاميرا/المايك: " + e.message);
+                    return hangUp();
+                }
+            }
+
+            const pc = getPeerConnection(callerId);
+            pc.isAnswering = true;
+            window.currentCallIsVideo = isVideo;
+
+            // Add local streams
+            localStream.getTracks().forEach(track => {
+                if (!pc.getSenders().find(s => s.track === track)) {
+                    pc.addTrack(track, localStream);
+                }
+            });
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => {
+                    if (!pc.getSenders().find(s => s.track === track)) {
+                        pc.addTrack(track, screenStream);
+                    }
+                });
+            }
+
+            try {
+                if (sdpOffer === "BROADCAST") {
+                    // It's a group ring. We must initiate the real offer to the caller.
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    signalrConnection.invoke("CallOffer", groupId, JSON.stringify(offer), isVideo, callerId);
+                } else {
+                    // It's a real offer (either 1-on-1 invite, or they replied to our broadcast)
+                    await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpOffer)));
+                    processIceQueue(callerId);
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    logWebRTC(`إرسال Answer للقبول إلى ${callerId}...`);
+                    signalrConnection.invoke("CallAnswer", groupId, callerId, JSON.stringify(answer));
+                }
             } catch (err) {
                 console.error("Error answering call", err);
+                if (pc) pc.isAnswering = false;
                 hangUp();
             }
         }
 
-        async function handleCallAnswered(sdpAnswer) {
-            if (!peerConnection || peerConnection.signalingState === "closed") return;
-            logWebRTC("تم قبول المكالمة! جاري تأسيس الاتصال P2P...");
+        async function handleCallAnswered(callerId, sdpAnswer) {
+            logWebRTC(`تم قبول المكالمة من ${callerId}!`);
             try {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpAnswer)));
-                processIceQueue();
+                let pc = peerConnections[callerId];
+                if (!pc) return; // Should not happen with new flow
+                
+                if (pc.signalingState !== "closed") {
+                    await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpAnswer)));
+                    processIceQueue(callerId);
+                }
             } catch (e) {
                 console.error(e);
             }
         }
 
-        async function processIceQueue() {
-            while (iceCandidateQueue.length > 0) {
-                const cand = iceCandidateQueue.shift();
+        async function addParticipantToCall() {
+            if (!localStream) return alert("لا توجد مكالمة نشطة");
+            
+            const modal = document.getElementById('addParticipantModal');
+            const listEl = document.getElementById('addParticipantList');
+            listEl.innerHTML = '<div class="text-center text-slate-500 py-4">جاري تحميل قائمة الموظفين...</div>';
+            modal.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${backendUrl}/api/Admin/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const users = await res.json();
+                listEl.innerHTML = '';
+                
+                users.forEach(u => {
+                    if (u.id === currentUser.id) return;
+                    if (peerConnections[u.id]) return; // Already in call
+                    
+                    listEl.innerHTML += `
+                        <div class="flex justify-between items-center p-2 bg-slate-50 rounded-lg border mb-1">
+                            <div>
+                                <span class="font-bold text-sm block">${u.fullName}</span>
+                                <span class="text-xs text-slate-400 block">${u.isOnline ? '🟢 متصل' : '⚪ غير متصل'}</span>
+                            </div>
+                            <button onclick="inviteUserToCall('${u.id}', '${u.fullName}')" class="bg-teal-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-teal-600">
+                                إضافة للمكالمة
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                if (listEl.innerHTML === '') {
+                    listEl.innerHTML = '<div class="text-center text-slate-500 py-4">لا يوجد موظفين إضافيين لضمهم.</div>';
+                }
+            } catch (e) {
+                listEl.innerHTML = `<div class="text-red-500 text-center py-4">خطأ في التحميل: ${e.message}</div>`;
+            }
+        }
+
+        function closeAddParticipantModal() {
+            document.getElementById('addParticipantModal').classList.add('hidden');
+        }
+
+        async function inviteUserToCall(userId, name) {
+            logWebRTC(`إرسال دعوة انضمام للمكالمة إلى ${name}...`);
+            closeAddParticipantModal();
+            
+            const pc = getPeerConnection(userId);
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => pc.addTrack(track, screenStream));
+            }
+
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                // CallOffer with specific targetUserId
+                signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), window.currentCallIsVideo || false, userId);
+            } catch (e) {
+                console.error("Failed to invite", e);
+            }
+        }
+
+        async function processIceQueue(userId) {
+            const pc = peerConnections[userId];
+            const q = iceCandidateQueues[userId] || [];
+            if (!pc) return;
+            while (q.length > 0) {
+                const cand = q.shift();
                 try {
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+                    await pc.addIceCandidate(new RTCIceCandidate(cand));
                 } catch (e) {
                     console.error("Error adding queued IceCandidate", e);
                 }
             }
         }
 
-        async function handleIceCandidate(candidateStr) {
+        async function handleIceCandidate(callerId, candidateStr) {
             try {
                 const cand = JSON.parse(candidateStr);
-                if (peerConnection && peerConnection.remoteDescription) {
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+                const pc = peerConnections[callerId];
+                if (pc && pc.remoteDescription) {
+                    await pc.addIceCandidate(new RTCIceCandidate(cand));
                 } else {
-                    iceCandidateQueue.push(cand);
+                    if (!iceCandidateQueues[callerId]) iceCandidateQueues[callerId] = [];
+                    iceCandidateQueues[callerId].push(cand);
                 }
             } catch (e) {
                 console.error("Error adding IceCandidate", e);
@@ -1223,14 +1480,13 @@
 
         function hangUp(broadcast = true) {
             logWebRTC("إنهاء المكالمة وإغلاق الوسائط...");
-            iceCandidateQueue = [];
-            remoteCameraStream = null;
-            remoteScreenStream = null;
+            
+            Object.values(peerConnections).forEach(pc => {
+                pc.close();
+            });
+            for (const key in peerConnections) delete peerConnections[key];
+            for (const key in iceCandidateQueues) delete iceCandidateQueues[key];
 
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
             if (localStream) {
                 localStream.getTracks().forEach(t => t.stop());
                 localStream = null;
@@ -1241,16 +1497,11 @@
             }
 
             document.getElementById('localVideo').srcObject = null;
-            document.getElementById('remoteVideo').srcObject = null;
-            document.getElementById('remoteCameraVideo').srcObject = null;
-            document.getElementById('localScreenVideo').srcObject = null;
-
             document.getElementById('localVideo').classList.add('hidden');
-            document.getElementById('remoteVideo').classList.add('hidden');
-            document.getElementById('remoteCameraVideo').classList.add('hidden');
-            document.getElementById('localScreenVideo').classList.add('hidden');
             
+            document.getElementById('videoGrid').innerHTML = '';
             document.getElementById('webrtcCallScreen').classList.add('hidden');
+            document.getElementById('btnAddParticipant').classList.add('hidden');
             
             document.getElementById('btnToggleScreen').classList.remove('bg-green-500');
             document.getElementById('btnToggleScreen').classList.add('bg-slate-700');
@@ -1271,39 +1522,73 @@
             }
         }
 
-        function toggleVideo() {
-            if (localStream) {
-                const videoTrack = localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                    videoTrack.enabled = !videoTrack.enabled;
-                    document.getElementById('btnToggleVideo').innerText = videoTrack.enabled ? '📹' : '🚫';
-                    document.getElementById('btnToggleVideo').classList.toggle('bg-red-500', !videoTrack.enabled);
+        async function toggleVideo() {
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            
+            if (videoTrack && videoTrack.isDummy) {
+                // User started an audio call and now wants to turn on the real camera
+                try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    
+                    localStream.removeTrack(videoTrack);
+                    videoTrack.stop();
+                    localStream.addTrack(newVideoTrack);
+                    
+                    const localVid = document.getElementById('localVideo');
+                    localVid.srcObject = localStream;
+                    localVid.classList.remove('hidden');
+                    
+                    // Replace the track in all active peer connections
+                    Object.values(peerConnections).forEach(pc => {
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) {
+                            sender.replaceTrack(newVideoTrack);
+                        }
+                    });
+                    
+                    document.getElementById('btnToggleVideo').innerText = '📹';
+                    document.getElementById('btnToggleVideo').classList.remove('bg-red-500');
+                    logWebRTC("تم استبدال كاميرا المحاكاة بالكاميرا الحقيقية بنجاح.");
+                } catch (e) {
+                    alert("تعذر تشغيل الكاميرا الحقيقية: " + e.message);
+                }
+            } else if (videoTrack) {
+                // Normal toggle for the real camera
+                videoTrack.enabled = !videoTrack.enabled;
+                document.getElementById('btnToggleVideo').innerText = videoTrack.enabled ? '📹' : '🚫';
+                document.getElementById('btnToggleVideo').classList.toggle('bg-red-500', !videoTrack.enabled);
+                
+                if (!videoTrack.enabled) {
+                    document.getElementById('localVideo').classList.add('hidden');
                 } else {
-                    alert('لا يمكنك تشغيل الكاميرا لأنك بدأت مكالمة صوتية فقط. يرجى إنهاء المكالمة وبدء مكالمة فيديو لتتمكن من استخدام الكاميرا.');
+                    document.getElementById('localVideo').classList.remove('hidden');
                 }
             }
         }
 
         async function toggleScreenShare() {
-            if (!peerConnection) return alert("لا توجد مكالمة نشطة");
+            const pcs = Object.values(peerConnections);
+            if (pcs.length === 0) return alert("لا توجد مكالمة نشطة للمشاركة فيها");
             
             try {
                 if (screenStream) {
                     // Stop screen sharing
-                    const screenSender = peerConnection.getSenders().find(s => s.track && screenStream && s.track === screenStream.getVideoTracks()[0]);
-                    if (screenSender) {
-                        peerConnection.removeTrack(screenSender);
-                    }
+                    pcs.forEach(pc => {
+                        const screenSender = pc.getSenders().find(s => s.track && screenStream && s.track === screenStream.getVideoTracks()[0]);
+                        if (screenSender) pc.removeTrack(screenSender);
+                    });
+                    
                     screenStream.getTracks().forEach(t => t.stop());
                     screenStream = null;
-                    
-                    document.getElementById('localScreenVideo').classList.add('hidden');
-                    document.getElementById('localScreenVideo').srcObject = null;
 
-                    // Force renegotiation so remote peer knows track was removed
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), true);
+                    // Force renegotiation
+                    for (const [userId, pc] of Object.entries(peerConnections)) {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), true, userId);
+                    }
 
                     document.getElementById('btnToggleScreen').classList.remove('bg-green-500');
                     document.getElementById('btnToggleScreen').classList.add('bg-slate-700');
@@ -1312,23 +1597,20 @@
                     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
                     const screenTrack = screenStream.getVideoTracks()[0];
                     
-                    // ADD track instead of removing camera track
-                    peerConnection.addTrack(screenTrack, screenStream);
+                    pcs.forEach(pc => {
+                        pc.addTrack(screenTrack, screenStream);
+                    });
 
-                    // Show screen share in local preview
-                    const tempStream = new MediaStream([screenTrack]);
-                    document.getElementById('localScreenVideo').srcObject = tempStream;
-                    document.getElementById('localScreenVideo').classList.remove('hidden');
-
-                    // Force renegotiation so remote peer adjusts to the screen share
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), true);
+                    // Force renegotiation
+                    for (const [userId, pc] of Object.entries(peerConnections)) {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), true, userId);
+                    }
                     
                     document.getElementById('btnToggleScreen').classList.remove('bg-slate-700');
                     document.getElementById('btnToggleScreen').classList.add('bg-green-500');
 
-                    // Handle user clicking "Stop sharing" on the browser's native UI bar
                     screenTrack.onended = () => {
                         toggleScreenShare(); // revert
                     };
@@ -1371,16 +1653,16 @@
             });
 
             signalrConnection.on("CallAnswered", (userId, sdpAnswer) => {
-                handleCallAnswered(sdpAnswer);
+                handleCallAnswered(userId, sdpAnswer);
             });
 
             // Hub sends "IceCandidate" (not "IceCandidateReceived")
             signalrConnection.on("IceCandidate", (userId, candidate) => {
-                handleIceCandidate(candidate);
+                handleIceCandidate(userId, candidate);
             });
             // Also listen to old name for backwards compat
             signalrConnection.on("IceCandidateReceived", (userId, candidate) => {
-                handleIceCandidate(candidate);
+                handleIceCandidate(userId, candidate);
             });
 
             signalrConnection.on("UserPresenceChanged", (userId, isOnline) => {
