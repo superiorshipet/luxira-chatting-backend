@@ -84,17 +84,17 @@ Base URL: `http://localhost:<port>/api`
 * **`GET /api/Group/{groupId}/members`**
   * **Description:** Gets active members of a specific group.
 * **`GET /api/Group/{groupId}/messages`**
-  * **Description:** Gets paginated message history for a group.
+  * **Description:** Gets paginated message history for a group. Note: If a message is soft-deleted, standard users will receive `null` for the message content. Administrators will receive the original unmasked content with the `IsDeleted = true` flag.
   * **Query Parameters:** `?beforeCursor={timestamp}&take=50`
 * **`POST /api/Group/{groupId}/members/me/mute`**
   * **Description:** Mutes or unmutes a group for the authenticated user.
   * **Body:** `{ "isMuted": true }`
 
 ### 4. Message Operations
-*Requires Standard user JWT `[Authorize]`*
+*Requires Admin JWT `[Authorize(Roles = "Admin")]`*
 
 * **`GET /api/Message/{messageId}/history`**
-  * **Description:** Retrieves the edit history of a specific message.
+  * **Description:** Retrieves the complete edit history of a specific message. This is strictly reserved for Administrators.
 
 ### 5. Attachments
 *Requires Standard user JWT `[Authorize]`*
@@ -117,6 +117,10 @@ Base URL: `http://localhost:<port>/api`
   * Sends a message to a group.
 * **`EditMessage(Guid messageId, string newContent)`**
   * Edits a previously sent message.
+* **`DeleteMessage(Guid groupId, Guid messageId)`**
+  * Soft-deletes a message (Admins can delete any message, users can delete their own).
+* **`PinMessage(Guid groupId, Guid messageId, bool isPinned)`**
+  * Pins or unpins a message (Requires Admin privileges).
 * **`MarkAsRead(Guid groupId, Guid messageId)`**
   * Dispatches a read receipt.
 * **`ReactToMessage(Guid groupId, Guid messageId, string emoji)`**
@@ -129,6 +133,10 @@ Base URL: `http://localhost:<port>/api`
   * Triggered when a new message is posted in a joined group.
 * **`MessageEdited(MessageDto message)`**
   * Triggered when a message is edited.
+* **`MessageDeleted(Guid groupId, Guid messageId, Guid userId)`**
+  * Triggered when a message is deleted.
+* **`MessagePinned(Guid groupId, Guid messageId, bool isPinned)`**
+  * Triggered when an admin pins or unpins a message.
 * **`MessageRead(Guid groupId, Guid messageId, Guid userId)`**
   * Triggered when a member reads a message.
 * **`MessageReacted(Guid groupId, Guid messageId, Guid userId, string emoji)`**

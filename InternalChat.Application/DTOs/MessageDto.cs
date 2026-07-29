@@ -12,6 +12,7 @@ public record MessageDto(
     DateTime SentAt,
     bool IsEdited,
     bool IsDeleted,
+    bool IsPinned,
     Guid? ReplyToMessageId,
     Guid? ForwardedFromMessageId,
     Guid? ForwardedFromGroupId,
