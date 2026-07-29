@@ -136,7 +136,7 @@ public class ChatHub : Hub
     public async Task CallOffer(Guid targetGroupId, string sdpOffer, bool isVideo)
     {
         var callerId = GetUserId();
-        await Clients.Group(targetGroupId.ToString())
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
             .SendAsync("IncomingCall", callerId, sdpOffer, isVideo, targetGroupId);
     }
 
@@ -144,7 +144,7 @@ public class ChatHub : Hub
     public async Task CallAnswer(Guid targetGroupId, Guid callerId, string sdpAnswer)
     {
         // Send answer back to the caller's group connection
-        await Clients.Group(targetGroupId.ToString())
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
             .SendAsync("CallAnswered", GetUserId(), sdpAnswer);
     }
 
@@ -158,7 +158,7 @@ public class ChatHub : Hub
     /// <summary>End an ongoing call.</summary>
     public async Task EndCall(Guid targetGroupId)
     {
-        await Clients.Group(targetGroupId.ToString())
+        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
             .SendAsync("CallEnded", GetUserId());
     }
 }

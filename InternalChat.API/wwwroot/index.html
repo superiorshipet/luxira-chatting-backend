@@ -167,11 +167,21 @@
                     <!-- Messages Area -->
                     <div class="flex-1 relative flex flex-col min-h-0 bg-slate-50 rounded-2xl mb-4 p-2">
                         <div id="webrtcCallScreen" class="absolute inset-0 bg-slate-900 rounded-2xl hidden flex-col items-center justify-center p-4 z-10">
-                            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover rounded-xl bg-black"></video>
+                            <!-- Main Video (Remote Camera or Screen) -->
+                            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-contain rounded-xl bg-black"></video>
+                            
+                            <!-- PIP Remote Camera (when screen is main) -->
+                            <video id="remoteCameraVideo" autoplay playsinline class="absolute top-4 left-4 w-32 h-24 object-cover rounded-lg border-2 border-blue-500 bg-black z-20 hidden shadow-lg"></video>
+
+                            <!-- PIP Local Camera -->
                             <video id="localVideo" autoplay muted playsinline class="absolute top-4 right-4 w-32 h-24 object-cover rounded-lg border-2 border-teal-500 bg-black z-20 shadow-lg"></video>
+                            
+                            <!-- PIP Local Screen -->
+                            <video id="localScreenVideo" autoplay muted playsinline class="absolute bottom-24 right-4 w-32 h-24 object-cover rounded-lg border-2 border-green-500 bg-black z-20 hidden shadow-lg"></video>
                             <div class="absolute bottom-6 flex gap-4 z-20">
                                 <button onclick="toggleAudio()" id="btnToggleAudio" class="bg-slate-700 text-white p-3 rounded-full hover:bg-slate-600 font-bold shadow-lg flex items-center justify-center w-12 h-12" title="كتم/تشغيل الميكروفون">🎙️</button>
                                 <button onclick="toggleVideo()" id="btnToggleVideo" class="bg-slate-700 text-white p-3 rounded-full hover:bg-slate-600 font-bold shadow-lg flex items-center justify-center w-12 h-12" title="إيقاف/تشغيل الكاميرا">📹</button>
+                                <button onclick="toggleScreenShare()" id="btnToggleScreen" class="bg-slate-700 text-white p-3 rounded-full hover:bg-slate-600 font-bold shadow-lg flex items-center justify-center w-12 h-12" title="مشاركة الشاشة">💻</button>
                                 <button onclick="hangUp()" class="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 font-bold shadow-lg flex items-center justify-center px-6">🛑 إنهاء المكالمة</button>
                             </div>
                         </div>
@@ -997,7 +1007,84 @@
 
         // --- WEBRTC CALLING LOGIC ---
         let localStream = null;
+        let screenStream = null;
+        let remoteCameraStream = null;
+        let remoteScreenStream = null;
         let peerConnection = null;
+        let iceCandidateQueue = [];
+
+        function setupPeerConnectionHandlers() {
+            peerConnection.ontrack = (event) => {
+                logWebRTC("تم استقبال مسار جديد (Remote Track Received)");
+                const stream = event.streams[0];
+                const track = event.track;
+                const remoteVid = document.getElementById('remoteVideo');
+                const remoteCam = document.getElementById('remoteCameraVideo');
+
+                if (!remoteCameraStream) {
+                    remoteCameraStream = stream;
+                    remoteVid.srcObject = null;
+                    remoteVid.srcObject = remoteCameraStream;
+                    remoteVid.classList.remove('hidden');
+                    remoteVid.play().catch(e => console.error("Autoplay prevented:", e));
+                } else if (stream.id !== remoteCameraStream.id) {
+                    remoteScreenStream = stream;
+                    
+                    remoteCam.srcObject = null;
+                    remoteCam.srcObject = remoteCameraStream;
+                    remoteCam.classList.remove('hidden');
+                    remoteCam.play().catch(e => console.error(e));
+
+                    remoteVid.srcObject = null;
+                    remoteVid.srcObject = remoteScreenStream;
+                    remoteVid.play().catch(e => console.error(e));
+                    
+                    track.onmute = () => {
+                        remoteScreenStream = null;
+                        remoteVid.srcObject = remoteCameraStream;
+                        remoteCam.srcObject = null;
+                        remoteCam.classList.add('hidden');
+                    };
+                }
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    signalrConnection.invoke("SendIceCandidate", activeGroupId, JSON.stringify(event.candidate))
+                        .catch(err => console.error(err));
+                }
+            };
+        }
+
+        function createDummyVideoTrack() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const ctx = canvas.getContext('2d');
+            
+            function draw() {
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, 640, 480);
+                ctx.fillStyle = '#444';
+                ctx.font = '30px Arial';
+                ctx.fillText('Audio Call...', 240, 240);
+                
+                // Add a moving element to ensure frames aren't identical (forces encoder to send)
+                ctx.fillStyle = '#0f766e';
+                const time = Date.now() / 1000;
+                ctx.beginPath();
+                ctx.arc(320 + Math.sin(time) * 100, 300, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                requestAnimationFrame(draw);
+            }
+            draw();
+
+            const stream = canvas.captureStream(15); // 15 fps to keep connection alive
+            const track = stream.getVideoTracks()[0];
+            track.enabled = true; // Must be enabled so frames flow, but we can mute it locally if needed
+            return track;
+        }
 
         const rtcConfig = {
             iceServers: [
@@ -1014,6 +1101,9 @@
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+                if (!isVideo) {
+                    localStream.addTrack(createDummyVideoTrack());
+                }
                 const localVid = document.getElementById('localVideo');
                 localVid.srcObject = localStream;
                 localVid.classList.remove('hidden');
@@ -1025,20 +1115,7 @@
                     peerConnection.addTrack(track, localStream);
                 });
 
-                peerConnection.ontrack = (event) => {
-                    logWebRTC("تم استقبال البث البعيد (Remote Track Received)");
-                    const remoteVid = document.getElementById('remoteVideo');
-                    remoteVid.srcObject = event.streams[0];
-                    remoteVid.classList.remove('hidden');
-                    remoteVid.play().catch(e => console.error("Autoplay prevented:", e));
-                };
-
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        signalrConnection.invoke("SendIceCandidate", activeGroupId, JSON.stringify(event.candidate))
-                            .catch(err => console.error(err));
-                    }
-                };
+                setupPeerConnectionHandlers();
 
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
@@ -1052,6 +1129,22 @@
         }
 
         async function handleIncomingCall(callerId, sdpOffer, isVideo, groupId) {
+            if (callerId === currentUser.id) return; // Prevent self-calling loop
+            
+            if (peerConnection && peerConnection.signalingState !== "closed") {
+                logWebRTC("تحديث إعدادات المكالمة (Renegotiation)...");
+                try {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpOffer)));
+                    processIceQueue();
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    signalrConnection.invoke("CallAnswer", groupId, callerId, JSON.stringify(answer));
+                } catch (e) {
+                    console.error("Renegotiation failed", e);
+                }
+                return;
+            }
+
             logWebRTC(`مكالمة واردة من ${callerId}. يرجى الرد...`);
             const accept = confirm(`لديك مكالمة ${isVideo ? 'فيديو' : 'صوتية'} واردة. هل تريد الرد؟\n(يجب الضغط على موافق لتفعيل الصوت والصورة)`);
             if (!accept) {
@@ -1064,6 +1157,9 @@
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+                if (!isVideo) {
+                    localStream.addTrack(createDummyVideoTrack());
+                }
                 const localVid = document.getElementById('localVideo');
                 localVid.srcObject = localStream;
                 localVid.classList.remove('hidden');
@@ -1075,21 +1171,10 @@
                     peerConnection.addTrack(track, localStream);
                 });
 
-                peerConnection.ontrack = (event) => {
-                    const remoteVid = document.getElementById('remoteVideo');
-                    remoteVid.srcObject = event.streams[0];
-                    remoteVid.classList.remove('hidden');
-                    remoteVid.play().catch(e => console.error("Autoplay prevented:", e));
-                };
-
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        signalrConnection.invoke("SendIceCandidate", groupId, JSON.stringify(event.candidate))
-                            .catch(err => console.error(err));
-                    }
-                };
+                setupPeerConnectionHandlers();
 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpOffer)));
+                processIceQueue();
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
 
@@ -1102,19 +1187,34 @@
         }
 
         async function handleCallAnswered(sdpAnswer) {
+            if (!peerConnection || peerConnection.signalingState === "closed") return;
             logWebRTC("تم قبول المكالمة! جاري تأسيس الاتصال P2P...");
             try {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdpAnswer)));
+                processIceQueue();
             } catch (e) {
                 console.error(e);
             }
         }
 
+        async function processIceQueue() {
+            while (iceCandidateQueue.length > 0) {
+                const cand = iceCandidateQueue.shift();
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (e) {
+                    console.error("Error adding queued IceCandidate", e);
+                }
+            }
+        }
+
         async function handleIceCandidate(candidateStr) {
             try {
-                if (peerConnection) {
-                    const cand = JSON.parse(candidateStr);
+                const cand = JSON.parse(candidateStr);
+                if (peerConnection && peerConnection.remoteDescription) {
                     await peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+                } else {
+                    iceCandidateQueue.push(cand);
                 }
             } catch (e) {
                 console.error("Error adding IceCandidate", e);
@@ -1123,6 +1223,10 @@
 
         function hangUp(broadcast = true) {
             logWebRTC("إنهاء المكالمة وإغلاق الوسائط...");
+            iceCandidateQueue = [];
+            remoteCameraStream = null;
+            remoteScreenStream = null;
+
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
@@ -1131,12 +1235,25 @@
                 localStream.getTracks().forEach(t => t.stop());
                 localStream = null;
             }
+            if (screenStream) {
+                screenStream.getTracks().forEach(t => t.stop());
+                screenStream = null;
+            }
 
             document.getElementById('localVideo').srcObject = null;
             document.getElementById('remoteVideo').srcObject = null;
+            document.getElementById('remoteCameraVideo').srcObject = null;
+            document.getElementById('localScreenVideo').srcObject = null;
+
             document.getElementById('localVideo').classList.add('hidden');
             document.getElementById('remoteVideo').classList.add('hidden');
+            document.getElementById('remoteCameraVideo').classList.add('hidden');
+            document.getElementById('localScreenVideo').classList.add('hidden');
+            
             document.getElementById('webrtcCallScreen').classList.add('hidden');
+            
+            document.getElementById('btnToggleScreen').classList.remove('bg-green-500');
+            document.getElementById('btnToggleScreen').classList.add('bg-slate-700');
 
             if (broadcast && signalrConnection && activeGroupId) {
                 signalrConnection.invoke("EndCall", activeGroupId).catch(err => console.error(err));
@@ -1164,6 +1281,60 @@
                 } else {
                     alert('لا يمكنك تشغيل الكاميرا لأنك بدأت مكالمة صوتية فقط. يرجى إنهاء المكالمة وبدء مكالمة فيديو لتتمكن من استخدام الكاميرا.');
                 }
+            }
+        }
+
+        async function toggleScreenShare() {
+            if (!peerConnection) return alert("لا توجد مكالمة نشطة");
+            
+            try {
+                if (screenStream) {
+                    // Stop screen sharing
+                    const screenSender = peerConnection.getSenders().find(s => s.track && screenStream && s.track === screenStream.getVideoTracks()[0]);
+                    if (screenSender) {
+                        peerConnection.removeTrack(screenSender);
+                    }
+                    screenStream.getTracks().forEach(t => t.stop());
+                    screenStream = null;
+                    
+                    document.getElementById('localScreenVideo').classList.add('hidden');
+                    document.getElementById('localScreenVideo').srcObject = null;
+
+                    // Force renegotiation so remote peer knows track was removed
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), true);
+
+                    document.getElementById('btnToggleScreen').classList.remove('bg-green-500');
+                    document.getElementById('btnToggleScreen').classList.add('bg-slate-700');
+                } else {
+                    // Start screen sharing
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenTrack = screenStream.getVideoTracks()[0];
+                    
+                    // ADD track instead of removing camera track
+                    peerConnection.addTrack(screenTrack, screenStream);
+
+                    // Show screen share in local preview
+                    const tempStream = new MediaStream([screenTrack]);
+                    document.getElementById('localScreenVideo').srcObject = tempStream;
+                    document.getElementById('localScreenVideo').classList.remove('hidden');
+
+                    // Force renegotiation so remote peer adjusts to the screen share
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    signalrConnection.invoke("CallOffer", activeGroupId, JSON.stringify(offer), true);
+                    
+                    document.getElementById('btnToggleScreen').classList.remove('bg-slate-700');
+                    document.getElementById('btnToggleScreen').classList.add('bg-green-500');
+
+                    // Handle user clicking "Stop sharing" on the browser's native UI bar
+                    screenTrack.onended = () => {
+                        toggleScreenShare(); // revert
+                    };
+                }
+            } catch (err) {
+                console.error("Screen share error", err);
             }
         }
 
