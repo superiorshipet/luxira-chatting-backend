@@ -20,6 +20,7 @@ public class Message : BaseEntity
     public DateTime SentAt { get; set; }
     public bool IsEdited { get; set; }
     public bool IsDeleted { get; set; }
+    public bool IsPinned { get; set; }
     
     public Guid? ReplyToMessageId { get; set; }
     public Message? ReplyToMessage { get; set; }

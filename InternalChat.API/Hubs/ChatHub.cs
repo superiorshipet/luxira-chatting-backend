@@ -97,4 +97,18 @@ public class ChatHub : Hub
             await Clients.Group(msg.GroupId.ToString()).SendAsync("ReceiveMessage", msg);
         }
     }
+
+    public async Task DeleteMessage(Guid groupId, Guid messageId)
+    {
+        var userId = GetUserId();
+        await _messageService.DeleteMessageAsync(messageId, userId);
+        await Clients.Group(groupId.ToString()).SendAsync("MessageDeleted", groupId, messageId, userId);
+    }
+
+    public async Task PinMessage(Guid groupId, Guid messageId, bool isPinned)
+    {
+        var userId = GetUserId();
+        await _messageService.PinMessageAsync(messageId, userId, isPinned);
+        await Clients.Group(groupId.ToString()).SendAsync("MessagePinned", groupId, messageId, isPinned);
+    }
 }
