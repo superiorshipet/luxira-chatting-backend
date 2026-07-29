@@ -46,9 +46,8 @@ builder.Services.AddScoped<IChatNotifier, ChatNotifier>();
 builder.Services.AddSingleton<IJwtProvider, JwtProvider>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<IPresenceTracker, PresenceTracker>();
-
-// For now, use a dummy cache service until Phase 7
-builder.Services.AddSingleton<ICacheService, DummyCacheService>();
+builder.Services.AddSingleton<IFileStorage, InternalChat.Infrastructure.Storage.LocalFileStorage>();
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 
 // Configure JWT Authentication
 var secretKey = builder.Configuration["Jwt:SecretKey"] ?? "InternalChatSuperSecretKey_1234567890_PleaseChangeMe!";
@@ -90,6 +89,7 @@ using (var scope = app.Services.CreateScope())
     await AppDbSeeder.SeedAsync(context);
 }
 
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

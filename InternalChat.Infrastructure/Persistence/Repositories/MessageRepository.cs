@@ -23,4 +23,12 @@ public class MessageRepository : EfRepository<Message>, IMessageRepository
             .Take(take)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<MessageEditHistory>> GetEditHistoryAsync(Guid messageId)
+    {
+        return await _context.MessageEditHistories
+            .Where(h => h.MessageId == messageId)
+            .OrderByDescending(h => h.EditedAt)
+            .ToListAsync();
+    }
 }

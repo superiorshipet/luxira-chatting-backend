@@ -11,4 +11,5 @@ public interface IMessageService
     Task ReactToMessageAsync(Guid messageId, Guid userId, string emoji);
     Task<IEnumerable<MessageDto>> ForwardMessageAsync(Guid messageId, Guid forwarderId, IEnumerable<Guid> targetGroupIds);
     Task<IEnumerable<MessageDto>> GetMessagesAsync(Guid groupId, Guid callerUserId, DateTime beforeCursor, int take);
+    Task<IEnumerable<MessageEditHistoryDto>> GetMessageEditHistoryAsync(Guid messageId, Guid callerUserId);
 }

@@ -191,4 +191,17 @@ public class MessageService : IMessageService
             m.Attachments.Select(a => new AttachmentDto(a.FileUrl, a.FileType, a.FileSizeBytes, a.ThumbnailUrl, a.DurationSeconds))
         ));
     }
+
+    public async Task<IEnumerable<MessageEditHistoryDto>> GetMessageEditHistoryAsync(Guid messageId, Guid callerUserId)
+    {
+        var message = await _unitOfWork.Messages.GetByIdAsync(messageId);
+        if (message == null) throw new Exception("Message not found.");
+        
+        var isMember = await _unitOfWork.GroupMembers.IsActiveMemberAsync(message.GroupId, callerUserId);
+        if (!isMember) throw new UnauthorizedAccessException("Not a member of this group.");
+        
+        var history = await _unitOfWork.Messages.GetEditHistoryAsync(messageId);
+        
+        return history.Select(h => new MessageEditHistoryDto(h.Id, h.MessageId, h.OldContent, h.EditedAt));
+    }
 }
