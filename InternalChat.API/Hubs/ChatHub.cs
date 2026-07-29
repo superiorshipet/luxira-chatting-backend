@@ -133,32 +133,114 @@ public class ChatHub : Hub
     // The Admin initiates calls. Peers signal each other through the server.
 
     /// <summary>Initiate a call to a group or specific user. Sends an offer SDP.</summary>
-    public async Task CallOffer(Guid targetGroupId, string sdpOffer, bool isVideo)
+    public async Task CallOffer(Guid targetGroupId, string sdpOffer, bool isVideo, Guid? targetUserId = null)
     {
         var callerId = GetUserId();
-        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
-            .SendAsync("IncomingCall", callerId, sdpOffer, isVideo, targetGroupId);
+        if (targetUserId.HasValue)
+        {
+            var connections = await _presenceTracker.GetConnectionsForUserAsync(targetUserId.Value);
+            if (connections.Any())
+            {
+                await Clients.Clients(connections)
+                    .SendAsync("IncomingCall", callerId, sdpOffer, isVideo, targetGroupId);
+            }
+        }
+        else
+        {
+            // BROADCAST: manually get all members of the group to bypass SignalR Group limitations (e.g. for Private Chats)
+            var members = await _groupService.GetGroupMembersAsync(targetGroupId, callerId);
+            var connectionIds = new List<string>();
+            foreach (var member in members)
+            {
+                if (member.UserId != callerId)
+                {
+                    var conns = await _presenceTracker.GetConnectionsForUserAsync(member.UserId);
+                    connectionIds.AddRange(conns);
+                }
+            }
+
+            if (connectionIds.Any())
+            {
+                await Clients.Clients(connectionIds)
+                    .SendAsync("IncomingCall", callerId, sdpOffer, isVideo, targetGroupId);
+            }
+            
+            // Also send to GroupExcept as a fallback for standard groups
+            await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
+                .SendAsync("IncomingCall", callerId, sdpOffer, isVideo, targetGroupId);
+        }
     }
 
     /// <summary>Answer a call with an SDP answer.</summary>
-    public async Task CallAnswer(Guid targetGroupId, Guid callerId, string sdpAnswer)
+    public async Task CallAnswer(Guid targetGroupId, Guid targetUserId, string sdpAnswer)
     {
-        // Send answer back to the caller's group connection
-        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
-            .SendAsync("CallAnswered", GetUserId(), sdpAnswer);
+        // Send answer back to the specific caller
+        var connections = await _presenceTracker.GetConnectionsForUserAsync(targetUserId);
+        if (connections.Any())
+        {
+            await Clients.Clients(connections)
+                .SendAsync("CallAnswered", GetUserId(), sdpAnswer);
+        }
     }
 
     /// <summary>Exchange ICE candidates for NAT traversal.</summary>
-    public async Task SendIceCandidate(Guid targetGroupId, string candidate)
+    public async Task SendIceCandidate(Guid targetGroupId, Guid? targetUserId, string candidate)
     {
-        await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
-            .SendAsync("IceCandidate", GetUserId(), candidate);
+        var callerId = GetUserId();
+        if (targetUserId.HasValue)
+        {
+            var connections = await _presenceTracker.GetConnectionsForUserAsync(targetUserId.Value);
+            if (connections.Any())
+            {
+                await Clients.Clients(connections)
+                    .SendAsync("IceCandidate", callerId, candidate);
+            }
+        }
+        else
+        {
+            var members = await _groupService.GetGroupMembersAsync(targetGroupId, callerId);
+            var connectionIds = new List<string>();
+            foreach (var member in members)
+            {
+                if (member.UserId != callerId)
+                {
+                    var conns = await _presenceTracker.GetConnectionsForUserAsync(member.UserId);
+                    connectionIds.AddRange(conns);
+                }
+            }
+            if (connectionIds.Any())
+            {
+                await Clients.Clients(connectionIds)
+                    .SendAsync("IceCandidate", callerId, candidate);
+            }
+            
+            await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
+                .SendAsync("IceCandidate", callerId, candidate);
+        }
     }
 
     /// <summary>End an ongoing call.</summary>
     public async Task EndCall(Guid targetGroupId)
     {
+        var callerId = GetUserId();
+        var members = await _groupService.GetGroupMembersAsync(targetGroupId, callerId);
+        var connectionIds = new List<string>();
+        foreach (var member in members)
+        {
+            if (member.UserId != callerId)
+            {
+                var conns = await _presenceTracker.GetConnectionsForUserAsync(member.UserId);
+                connectionIds.AddRange(conns);
+            }
+        }
+        if (connectionIds.Any())
+        {
+            await Clients.Clients(connectionIds)
+                .SendAsync("CallEnded", callerId);
+        }
+
         await Clients.GroupExcept(targetGroupId.ToString(), Context.ConnectionId)
-            .SendAsync("CallEnded", GetUserId());
+            .SendAsync("CallEnded", callerId);
     }
 }
+
