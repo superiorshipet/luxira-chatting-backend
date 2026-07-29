@@ -12,6 +12,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await AppDbSeeder.SeedAsync(context);
+}
+
 app.UseAuthorization();
 app.MapControllers();
 
