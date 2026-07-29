@@ -67,4 +67,12 @@ public class GroupController : ControllerBase
         var results = await _groupService.SearchMessagesAsync(GetUserId(), keyword);
         return Ok(results);
     }
+
+    /// <summary>Mark all messages in a group as read for the current user.</summary>
+    [HttpPost("{groupId}/mark-read")]
+    public async Task<IActionResult> MarkGroupAsRead(Guid groupId)
+    {
+        await _messageService.MarkGroupAsReadAsync(groupId, GetUserId());
+        return Ok(new { message = "Marked as read." });
+    }
 }

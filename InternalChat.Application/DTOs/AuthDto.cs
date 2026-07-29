@@ -5,7 +5,7 @@ namespace InternalChat.Application.DTOs;
 // Auth
 public record LoginRequest(string PhoneNumber, string Password);
 public record LoginResponse(string Token, UserDto User);
-public record ForgotPasswordRequest(string Email);
+public record ForgotPasswordRequest(string PhoneNumber, string Email);
 public record ResetPasswordRequest(string Email, string Token, string NewPassword);
 
 // User DTOs

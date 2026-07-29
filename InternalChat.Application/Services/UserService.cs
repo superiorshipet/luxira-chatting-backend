@@ -46,11 +46,11 @@ public class UserService : IUserService
         return new LoginResponse(token, MapToDto(user));
     }
 
-    public async Task<string> ForgotPasswordAsync(string email)
+    public async Task<string> ForgotPasswordAsync(string phoneNumber, string email)
     {
         var user = await _userQuery.GetByEmailAsync(email);
-        if (user == null)
-            return "إذا كان هذا البريد الإلكتروني مسجلاً، فستتلقى رابطاً لإعادة تعيين كلمة المرور.";
+        if (user == null || user.PhoneNumber != phoneNumber)
+            return "إذا كانت هذه البيانات مسجلة، فستتلقى رمزاً لإعادة تعيين كلمة المرور.";
 
         var token = Convert.ToHexString(Guid.NewGuid().ToByteArray());
         user.PasswordResetToken          = token;
@@ -81,7 +81,8 @@ public class UserService : IUserService
     {
         var user = await _userQuery.GetByEmailAsync(email);
         if (user == null ||
-            user.PasswordResetToken != token ||
+            string.IsNullOrEmpty(user.PasswordResetToken) ||
+            !user.PasswordResetToken.Trim().Equals(token?.Trim(), StringComparison.OrdinalIgnoreCase) ||
             user.PasswordResetTokenExpiresAt <= DateTime.UtcNow)
             throw new UnauthorizedAccessException("Invalid or expired reset token.");
 

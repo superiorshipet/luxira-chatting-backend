@@ -10,7 +10,7 @@ public interface IUserService
 {
     // Auth
     Task<LoginResponse?> LoginAsync(string phoneNumber, string password);
-    Task<string> ForgotPasswordAsync(string email);
+    Task<string> ForgotPasswordAsync(string phoneNumber, string email);
     Task ResetPasswordAsync(string email, string token, string newPassword);
 
     // Admin user management

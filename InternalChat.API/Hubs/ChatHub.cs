@@ -66,6 +66,16 @@ public class ChatHub : Hub
         await Clients.Group(groupId.ToString()).SendAsync("ReceiveMessage", message);
     }
 
+    public async Task JoinGroup(Guid groupId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupId.ToString());
+    }
+
+    public async Task LeaveGroup(Guid groupId)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupId.ToString());
+    }
+
     public async Task EditMessage(Guid messageId, string newContent)
     {
         var userId = GetUserId();

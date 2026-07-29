@@ -27,4 +27,11 @@ public class MessageReadRepository : IMessageReadRepository
             .Where(mr => mr.MessageId == messageId)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<MessageRead>> GetByUserIdAsync(Guid userId)
+    {
+        return await _context.MessageReads
+            .Where(mr => mr.UserId == userId)
+            .ToListAsync();
+    }
 }

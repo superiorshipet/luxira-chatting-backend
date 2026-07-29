@@ -16,11 +16,13 @@ public class AdminController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly IGroupService _groupService;
+    private readonly Infrastructure.Persistence.AppDbContext _db;
 
-    public AdminController(IUserService userService, IGroupService groupService)
+    public AdminController(IUserService userService, IGroupService groupService, Infrastructure.Persistence.AppDbContext db)
     {
         _userService  = userService;
         _groupService = groupService;
+        _db           = db;
     }
 
     private Guid AdminId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -90,6 +92,15 @@ public class AdminController : ControllerBase
         return Ok(group);
     }
 
+    /// <summary>Get all groups in the system (Admin only).</summary>
+    [HttpGet("groups")]
+    public async Task<IActionResult> GetAllGroups()
+    {
+        var groups = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            _db.Groups.Where(g => !g.IsArchived && !g.IsPrivate));
+        return Ok(groups.Select(g => new GroupDto(g.Id, g.Name, g.ImageUrl, g.CreatedAt)));
+    }
+
     /// <summary>Create a private 1-on-1 chat with a specific employee.</summary>
     [HttpPost("groups/private")]
     public async Task<IActionResult> CreatePrivateChat([FromBody] CreatePrivateChatRequest request)
@@ -128,6 +139,22 @@ public class AdminController : ControllerBase
         await _groupService.MuteMemberAsync(groupId, userId, request.IsMuted);
         return Ok(new { message = $"User {(request.IsMuted ? "muted" : "unmuted")}." });
     }
+
+    /// <summary>Update group details (name, image).</summary>
+    [HttpPut("groups/{groupId}")]
+    public async Task<IActionResult> UpdateGroup(Guid groupId, [FromBody] UpdateGroupRequest request)
+    {
+        try
+        {
+            await _groupService.UpdateGroupAsync(groupId, request.Name, request.ImageUrl);
+            return Ok(new { message = "Group updated successfully." });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
 
 public record BlockRequest(string? Reason);
+public record UpdateGroupRequest(string Name, string? ImageUrl);

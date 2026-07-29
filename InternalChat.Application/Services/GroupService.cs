@@ -27,6 +27,18 @@ public class GroupService : IGroupService
             IsArchived = false, IsPrivate = false
         };
         await _unitOfWork.Groups.AddAsync(group);
+
+        // Add creator admin as first member
+        await _unitOfWork.GroupMembers.AddAsync(new GroupMember
+        {
+            Id = Guid.NewGuid(),
+            GroupId = group.Id,
+            UserId = adminId,
+            IsMuted = false,
+            JoinedAt = DateTime.UtcNow,
+            AddedByAdminId = adminId
+        });
+
         await _unitOfWork.SaveChangesAsync();
         return new GroupDto(group.Id, group.Name, group.ImageUrl, group.CreatedAt);
     }
@@ -101,4 +113,14 @@ public class GroupService : IGroupService
 
     public async Task<IEnumerable<MessageDto>> SearchMessagesAsync(Guid userId, string keyword)
         => await _groupQuery.SearchMessagesAsync(userId, keyword);
+
+    public async Task UpdateGroupAsync(Guid groupId, string name, string? imageUrl)
+    {
+        var group = await _unitOfWork.Groups.GetByIdAsync(groupId);
+        if (group == null) throw new Exception("Group not found");
+        group.Name = name;
+        if (imageUrl != null) group.ImageUrl = imageUrl;
+        _unitOfWork.Groups.Update(group);
+        await _unitOfWork.SaveChangesAsync();
+    }
 }

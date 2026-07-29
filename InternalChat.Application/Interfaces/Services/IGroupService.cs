@@ -13,4 +13,5 @@ public interface IGroupService
     Task<IEnumerable<GroupDto>> GetUserGroupsFilteredAsync(Guid userId, string? filter);
     Task<IEnumerable<GroupMemberDto>> GetGroupMembersAsync(Guid groupId, Guid callerUserId);
     Task<IEnumerable<MessageDto>> SearchMessagesAsync(Guid userId, string keyword);
+    Task UpdateGroupAsync(Guid groupId, string name, string? imageUrl);
 }
